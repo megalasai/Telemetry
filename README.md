@@ -23,8 +23,8 @@ curl -fsSL https://get.docker.com | sh
 4. Clone this repo and create `.env` (do not commit it):
 
 ```bash
-git clone https://github.com/megalasai/Fleetel-Telemetry.git
-cd Fleetel-Telemetry
+git clone https://github.com/megalasai/Telemetry.git
+cd Telemetry
 cp .env.example .env
 nano .env
 ```
