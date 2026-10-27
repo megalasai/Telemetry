@@ -1,0 +1,33 @@
+name: fleetel-telemetry
+
+services:
+  telemetry:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "4200:4200"
+      - "4210:4210"
+      - "21100:21100"
+      - "5001:5001"
+      - "8821:8821"
+    environment:
+      TELEMETRY_HTTP_HOST: 0.0.0.0
+      TELEMETRY_HTTP_PORT: "4200"
+      TELEMETRY_TCP_HOST: 0.0.0.0
+      TELEMETRY_TCP_PORT: "4210"
+      TELEMETRY_SQLITE: /data/telemetry.sqlite
+      WANWAY_TCP_ENABLED: "true"
+      WANWAY_TCP_HOST: 0.0.0.0
+      WANWAY_TCP_PORTS: "21100,5001,8821"
+      MONGODB_URI: ${MONGODB_URI}
+      LOCATION_API_URL: ${LOCATION_API_URL:-}
+      PLATFORM_API_URL: ${PLATFORM_API_URL:-}
+      PLATFORM_TELEMETRY_PATH: ${PLATFORM_TELEMETRY_PATH:-/api/v1/internal/iot/telemetry}
+      TELEMETRY_HTTP_API_KEY: ${TELEMETRY_HTTP_API_KEY:-dev-gps-ingest}
+    env_file:
+      - .env
+    volumes:
+      - telemetry_data:/data
+
+volumes:
+  telemetry_data:

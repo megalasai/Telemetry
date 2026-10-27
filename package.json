@@ -1,0 +1,25 @@
+{
+  "name": "fleetel-telemetry",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone GPS / WanWay telemetry service for Fleetel-Switchride. Deploy on a droplet or VM.",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/entrypoint.js",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "fastify": "^5.6.1",
+    "mongoose": "^8.9.5",
+    "mqtt": "^5.10.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "tsx": "^4.20.5",
+    "typescript": "^5.7.3"
+  }
+}

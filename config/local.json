@@ -1,0 +1,3 @@
+{
+  "_comment": "Not loaded at runtime. This app is standalone like apps/location. Configuration is SQLite at data/telemetry.sqlite."
+}
