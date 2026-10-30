@@ -1,12 +1,16 @@
+# Standalone image. Build from this repo root (not Digi-Switchride):
+#   docker compose up -d --build
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
+ENV NODE_OPTIONS=--max-old-space-size=768
 COPY package.json package-lock.json tsconfig.json ./
 COPY src ./src
-RUN npm ci && npm run build
+RUN npm ci --no-audit --no-fund && npm run build && npm prune --omit=dev
 
 FROM node:22-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
+ENV NODE_OPTIONS=--max-old-space-size=512
 ENV TELEMETRY_HTTP_HOST=0.0.0.0
 ENV TELEMETRY_HTTP_PORT=4200
 ENV TELEMETRY_TCP_HOST=0.0.0.0
@@ -14,8 +18,8 @@ ENV TELEMETRY_SQLITE=/data/telemetry.sqlite
 ENV WANWAY_TCP_ENABLED=true
 ENV WANWAY_TCP_HOST=0.0.0.0
 ENV WANWAY_TCP_PORTS=21100,5001,8821
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+COPY --from=build /app/package.json ./
+COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 VOLUME ["/data"]
 EXPOSE 4200 4210 21100 5001 8821
