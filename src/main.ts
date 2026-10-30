@@ -27,7 +27,7 @@ export async function start(): Promise<void> {
   });
 }
 
-if (isMainModule(import.meta.url)) {
+if (isMainModule(import.meta.url) && /main\.(t|j)s$/.test(process.argv[1] ?? '')) {
   start().catch((error: unknown) => {
     console.error(error instanceof Error ? error.message : error);
     process.exit(1);
