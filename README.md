@@ -16,6 +16,18 @@ Admin and API stay on App Platform. This process writes GPS into the **same Mong
 
 ## Deploy
 
+On a 2 GB droplet, add swap **before** Docker build (otherwise npm is killed and you see `Exit handler never called`):
+
+```bash
+fallocate -l 2G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo '/swapfile none swap sw 0 0' | tee -a /etc/fstab
+```
+
+Then:
+
 ```bash
 curl -fsSL https://get.docker.com | sh
 git clone https://github.com/megalasai/Telemetry.git

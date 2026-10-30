@@ -1,5 +1,4 @@
 node_modules
-dist
 data
 .git
 .env
@@ -7,3 +6,6 @@ data
 *.sqlite-wal
 *.sqlite-shm
 README.md
+src
+tsconfig.json
+package-lock.json
