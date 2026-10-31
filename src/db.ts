@@ -34,6 +34,8 @@ const deviceSchema = new Schema(
   {
     deviceId: { type: String, required: true },
     tenantId: String,
+    pendingCommand: String,
+    lastCommandAt: Date,
     vehicleId: String,
     vendorType: { type: String, default: 'GpsIngest' },
     connectionStatus: { type: String, default: 'Unknown' },
@@ -70,7 +72,22 @@ const gpsSchema = new Schema(
 
 export const VehicleModel = mongoose.models.TelemetryVehicle ?? mongoose.model('TelemetryVehicle', vehicleSchema);
 export const DeviceModel = mongoose.models.TelemetryDevice ?? mongoose.model('TelemetryDevice', deviceSchema);
+const trackPointSchema = new Schema(
+  {
+    vehicleId: { type: String, required: true },
+    deviceId: String,
+    lat: { type: Number, required: true },
+    lng: { type: Number, required: true },
+    speedKmh: Number,
+    ignition: String,
+    at: { type: Date, required: true },
+    tenantId: String,
+  },
+  { collection: 'gps_track_points', timestamps: true, strict: false },
+);
+
 export const GpsPositionModel = mongoose.models.GpsPosition ?? mongoose.model('GpsPosition', gpsSchema);
+export const GpsTrackPointModel = mongoose.models.GpsTrackPoint ?? mongoose.model('GpsTrackPoint', trackPointSchema);
 
 export async function connectMongo(uri: string): Promise<void> {
   await mongoose.connect(uri, { family: 4, serverSelectionTimeoutMS: 15000 });
@@ -83,6 +100,8 @@ async function relaxConflictingIndexes() {
   await DeviceModel.collection.createIndex({ deviceId: 1 }).catch(() => undefined);
   await DeviceModel.collection.createIndex({ vehicleId: 1 }, { sparse: true }).catch(() => undefined);
   await GpsPositionModel.collection.createIndex({ deviceKey: 1 }, { unique: true }).catch(() => undefined);
+  await GpsTrackPointModel.collection.createIndex({ vehicleId: 1, at: -1 }).catch(() => undefined);
+  await GpsTrackPointModel.collection.createIndex({ at: 1 }, { expireAfterSeconds: 14 * 24 * 60 * 60 }).catch(() => undefined);
 }
 
 async function dropUniqueIfPresent(collection: string, field: string) {

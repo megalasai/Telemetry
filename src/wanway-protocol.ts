@@ -99,6 +99,26 @@ export function buildAck(protocol: number, serial: Buffer, extended = false): Bu
   return Buffer.from([START_SHORT, START_SHORT, 0x05, protocol, s0, s1, crc >> 8, crc & 0xff, STOP_A, STOP_B]);
 }
 
+/** Server → terminal string command (0x80), e.g. DYD,000000# / HFYD,000000#. */
+export function buildServerCommand(command: string, serial: Buffer): Buffer {
+  const text = Buffer.from(command, 'ascii');
+  const flag = Buffer.from([0x00, 0x00, 0x00, 0x01]);
+  const contentLen = flag.length + text.length;
+  const payload = Buffer.concat([Buffer.from([0x80, contentLen]), flag, text, Buffer.from([serial[0] ?? 0, serial[1] ?? 0])]);
+  const length = payload.length + 2;
+  const crc = crc16Itu(Buffer.concat([Buffer.from([length]), payload]));
+  return Buffer.concat([
+    Buffer.from([START_SHORT, START_SHORT, length]),
+    payload,
+    Buffer.from([crc >> 8, crc & 0xff, STOP_A, STOP_B]),
+  ]);
+}
+
+export function nextSerial(serial: Buffer): Buffer {
+  const value = ((serial[0] ?? 0) << 8) + (serial[1] ?? 0) + 1;
+  return Buffer.from([(value >> 8) & 0xff, value & 0xff]);
+}
+
 function parseGpsBlock(info: Buffer, imei: string, kind: WanwayFix['kind']): WanwayFix {
   if (info.length < 18) return { imei, kind };
   const at = bcdDate(info, 0);

@@ -4,7 +4,8 @@ import { logDeviceFile } from './file-log.js';
 import { ingestPing, touchDevice } from './ingest.js';
 import type { ConfigStore } from './store.js';
 import type { AppConfig } from './types.js';
-import { isGpsFix, parseWanwayBuffer, type WanwayFix } from './wanway-protocol.js';
+import { DeviceModel } from './db.js';
+import { buildServerCommand, isGpsFix, nextSerial, parseWanwayBuffer, type WanwayFix } from './wanway-protocol.js';
 
 export type WanwayStatus = {
   enabled: boolean;
@@ -71,6 +72,7 @@ export class WanwayTcp {
     socket.setKeepAlive(true, 30_000);
     let buf = Buffer.alloc(0);
     let imei = '';
+    let serial = Buffer.from([0x00, 0x01]);
     const remote = `${socket.remoteAddress}:${socket.remotePort}`;
     console.log(`WanWay connection ${remote} on :${port}`);
 
@@ -86,6 +88,8 @@ export class WanwayTcp {
       const parsed = parseWanwayBuffer(buf, imei);
       if (parsed.consumed > 0) buf = buf.subarray(parsed.consumed);
       if (parsed.replies.length) {
+        const last = parsed.replies[parsed.replies.length - 1];
+        if (last.length >= 8) serial = Buffer.from([last[4], last[5]]);
         const reply = parsed.replies.length === 1 ? parsed.replies[0] : Buffer.concat(parsed.replies);
         try {
           socket.write(reply);
@@ -112,6 +116,11 @@ export class WanwayTcp {
           this.status.lastError = error instanceof Error ? error.message : String(error);
           console.warn(`WanWay ingest ${fix.imei}: ${this.status.lastError}`);
         });
+        if (imei) {
+          void flushPendingCommand(socket, imei, serial, port, remote).then((used) => {
+            if (used) serial = nextSerial(serial);
+          });
+        }
       }
     });
     socket.on('error', (error) => {
@@ -129,6 +138,25 @@ function parsePorts(raw: string): number[] {
     .map((p) => Number(p.trim()))
     .filter((p) => Number.isInteger(p) && p > 0 && p < 65536);
   return [...new Set(ports.length ? ports : [21100])];
+}
+
+async function flushPendingCommand(socket: Socket, imei: string, serial: Buffer, port: number, remote: string) {
+  const digits = imei.replace(/\D/g, '');
+  const keys = [imei, digits, digits.length === 15 ? `0${digits}` : '', digits.length === 16 && digits.startsWith('0') ? digits.slice(1) : ''].filter(Boolean);
+  const device = await DeviceModel.findOneAndUpdate(
+    { $or: [{ deviceId: { $in: keys } }, { imei: { $in: keys } }], pendingCommand: { $exists: true, $nin: [null, ''] } },
+    { $unset: { pendingCommand: 1 }, $set: { lastCommandAt: new Date() } },
+  );
+  const command = (device as { pendingCommand?: string } | null)?.pendingCommand;
+  if (!command) return false;
+  try {
+    const packet = buildServerCommand(command, nextSerial(serial));
+    socket.write(packet);
+    logDeviceFile(port, { kind: 'command', remote, imei, command, hex: packet.toString('hex') });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function persistFix(config: AppConfig, store: ConfigStore, fix: WanwayFix) {

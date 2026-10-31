@@ -128477,6 +128477,8 @@ var deviceSchema = new import_mongoose.Schema(
   {
     deviceId: { type: String, required: true },
     tenantId: String,
+    pendingCommand: String,
+    lastCommandAt: Date,
     vehicleId: String,
     vendorType: { type: String, default: "GpsIngest" },
     connectionStatus: { type: String, default: "Unknown" },
@@ -128511,7 +128513,21 @@ var gpsSchema = new import_mongoose.Schema(
 );
 var VehicleModel = import_mongoose.default.models.TelemetryVehicle ?? import_mongoose.default.model("TelemetryVehicle", vehicleSchema);
 var DeviceModel = import_mongoose.default.models.TelemetryDevice ?? import_mongoose.default.model("TelemetryDevice", deviceSchema);
+var trackPointSchema = new import_mongoose.Schema(
+  {
+    vehicleId: { type: String, required: true },
+    deviceId: String,
+    lat: { type: Number, required: true },
+    lng: { type: Number, required: true },
+    speedKmh: Number,
+    ignition: String,
+    at: { type: Date, required: true },
+    tenantId: String
+  },
+  { collection: "gps_track_points", timestamps: true, strict: false }
+);
 var GpsPositionModel = import_mongoose.default.models.GpsPosition ?? import_mongoose.default.model("GpsPosition", gpsSchema);
+var GpsTrackPointModel = import_mongoose.default.models.GpsTrackPoint ?? import_mongoose.default.model("GpsTrackPoint", trackPointSchema);
 async function connectMongo(uri) {
   await import_mongoose.default.connect(uri, { family: 4, serverSelectionTimeoutMS: 15e3 });
   await relaxConflictingIndexes();
@@ -128522,6 +128538,8 @@ async function relaxConflictingIndexes() {
   await DeviceModel.collection.createIndex({ deviceId: 1 }).catch(() => void 0);
   await DeviceModel.collection.createIndex({ vehicleId: 1 }, { sparse: true }).catch(() => void 0);
   await GpsPositionModel.collection.createIndex({ deviceKey: 1 }, { unique: true }).catch(() => void 0);
+  await GpsTrackPointModel.collection.createIndex({ vehicleId: 1, at: -1 }).catch(() => void 0);
+  await GpsTrackPointModel.collection.createIndex({ at: 1 }, { expireAfterSeconds: 14 * 24 * 60 * 60 }).catch(() => void 0);
 }
 async function dropUniqueIfPresent(collection, field) {
   const col = import_mongoose.default.connection.collection(collection);
@@ -128810,6 +128828,15 @@ async function ingestPing(config, store, ping) {
     if (ping.speedKmh != null) vehicleSet.speedKmh = ping.speedKmh;
     if (ping.ignition) vehicleSet.ignition = ping.ignition;
     await persistByEitherId(VehicleModel.collection, String(vehicle._id), vehicleSet);
+    await GpsTrackPointModel.create({
+      vehicleId: String(vehicle._id),
+      deviceId,
+      lat: ping.lat,
+      lng: ping.lng,
+      speedKmh: ping.speedKmh,
+      ignition: ping.ignition,
+      at
+    }).catch(() => void 0);
   }
   await forwardToPlatform(config, ping, deviceId);
   return {
@@ -129355,6 +129382,23 @@ function buildAck(protocol, serial, extended = false) {
   const crc = crc16Itu(body);
   return Buffer.from([START_SHORT, START_SHORT, 5, protocol, s0, s1, crc >> 8, crc & 255, STOP_A, STOP_B]);
 }
+function buildServerCommand(command, serial) {
+  const text = Buffer.from(command, "ascii");
+  const flag = Buffer.from([0, 0, 0, 1]);
+  const contentLen = flag.length + text.length;
+  const payload = Buffer.concat([Buffer.from([128, contentLen]), flag, text, Buffer.from([serial[0] ?? 0, serial[1] ?? 0])]);
+  const length = payload.length + 2;
+  const crc = crc16Itu(Buffer.concat([Buffer.from([length]), payload]));
+  return Buffer.concat([
+    Buffer.from([START_SHORT, START_SHORT, length]),
+    payload,
+    Buffer.from([crc >> 8, crc & 255, STOP_A, STOP_B])
+  ]);
+}
+function nextSerial(serial) {
+  const value = ((serial[0] ?? 0) << 8) + (serial[1] ?? 0) + 1;
+  return Buffer.from([value >> 8 & 255, value & 255]);
+}
 function parseGpsBlock(info, imei, kind) {
   if (info.length < 18) return { imei, kind };
   const at = bcdDate(info, 0);
@@ -129580,6 +129624,7 @@ var WanwayTcp = class {
     socket.setKeepAlive(true, 3e4);
     let buf = Buffer.alloc(0);
     let imei = "";
+    let serial = Buffer.from([0, 1]);
     const remote = `${socket.remoteAddress}:${socket.remotePort}`;
     console.log(`WanWay connection ${remote} on :${port}`);
     socket.on("data", (chunk) => {
@@ -129594,6 +129639,8 @@ var WanwayTcp = class {
       const parsed = parseWanwayBuffer(buf, imei);
       if (parsed.consumed > 0) buf = buf.subarray(parsed.consumed);
       if (parsed.replies.length) {
+        const last = parsed.replies[parsed.replies.length - 1];
+        if (last.length >= 8) serial = Buffer.from([last[4], last[5]]);
         const reply = parsed.replies.length === 1 ? parsed.replies[0] : Buffer.concat(parsed.replies);
         try {
           socket.write(reply);
@@ -129619,6 +129666,11 @@ var WanwayTcp = class {
           this.status.lastError = error instanceof Error ? error.message : String(error);
           console.warn(`WanWay ingest ${fix.imei}: ${this.status.lastError}`);
         });
+        if (imei) {
+          void flushPendingCommand(socket, imei, serial, port, remote).then((used) => {
+            if (used) serial = nextSerial(serial);
+          });
+        }
       }
     });
     socket.on("error", (error) => {
@@ -129632,6 +129684,24 @@ var WanwayTcp = class {
 function parsePorts(raw) {
   const ports = raw.split(/[,\s]+/).map((p) => Number(p.trim())).filter((p) => Number.isInteger(p) && p > 0 && p < 65536);
   return [...new Set(ports.length ? ports : [21100])];
+}
+async function flushPendingCommand(socket, imei, serial, port, remote) {
+  const digits = imei.replace(/\D/g, "");
+  const keys = [imei, digits, digits.length === 15 ? `0${digits}` : "", digits.length === 16 && digits.startsWith("0") ? digits.slice(1) : ""].filter(Boolean);
+  const device = await DeviceModel.findOneAndUpdate(
+    { $or: [{ deviceId: { $in: keys } }, { imei: { $in: keys } }], pendingCommand: { $exists: true, $nin: [null, ""] } },
+    { $unset: { pendingCommand: 1 }, $set: { lastCommandAt: /* @__PURE__ */ new Date() } }
+  );
+  const command = device?.pendingCommand;
+  if (!command) return false;
+  try {
+    const packet = buildServerCommand(command, nextSerial(serial));
+    socket.write(packet);
+    logDeviceFile(port, { kind: "command", remote, imei, command, hex: packet.toString("hex") });
+    return true;
+  } catch {
+    return false;
+  }
 }
 async function persistFix(config, store, fix) {
   if (isGpsFix(fix)) {
@@ -129797,9 +129867,9 @@ if (isMainModule(import.meta.url) && /main\.(t|j)s$/.test(process.argv[1] ?? "")
     process.exit(1);
   });
 }
-
-// src/entrypoint.ts
-await start();
+export {
+  start
+};
 /*! Bundled license information:
 
 toad-cache/dist/toad-cache.cjs:

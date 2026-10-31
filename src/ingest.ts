@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import type { AppConfig } from './types.js';
 import type { ConfigStore } from './store.js';
-import { DeviceModel, GpsPositionModel, VehicleModel, pruneTrail } from './db.js';
+import { DeviceModel, GpsPositionModel, GpsTrackPointModel, VehicleModel, pruneTrail } from './db.js';
 import { resolveDisplayPlace } from './place.js';
 
 export type GpsPing = {
@@ -221,6 +221,15 @@ export async function ingestPing(config: AppConfig, store: ConfigStore, ping: Gp
     if (ping.speedKmh != null) vehicleSet.speedKmh = ping.speedKmh;
     if (ping.ignition) vehicleSet.ignition = ping.ignition;
     await persistByEitherId(VehicleModel.collection, String(vehicle._id), vehicleSet);
+    await GpsTrackPointModel.create({
+      vehicleId: String(vehicle._id),
+      deviceId,
+      lat: ping.lat,
+      lng: ping.lng,
+      speedKmh: ping.speedKmh,
+      ignition: ping.ignition,
+      at,
+    }).catch(() => undefined);
   }
 
   await forwardToPlatform(config, ping, deviceId);
