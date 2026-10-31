@@ -1,4 +1,5 @@
 import type { AppConfig, GpsSource } from './types.js';
+import { logDeviceFile } from './file-log.js';
 import { ingestPing, normalizePing } from './ingest.js';
 import { parsePayload } from './parse.js';
 import type { ConfigStore } from './store.js';
@@ -29,6 +30,7 @@ export async function pullSource(config: AppConfig, store: ConfigStore, source: 
   for (const row of rows) {
     const ping = normalizePing(row);
     if (!ping) continue;
+    logDeviceFile('pull', { kind: 'pull', source: source.name, deviceId: ping.deviceId, lat: ping.lat, lng: ping.lng });
     try {
       await ingestPing(config, store, ping);
       count += 1;

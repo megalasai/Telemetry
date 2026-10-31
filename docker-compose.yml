@@ -24,10 +24,14 @@ services:
       PLATFORM_API_URL: ${PLATFORM_API_URL:-}
       PLATFORM_TELEMETRY_PATH: ${PLATFORM_TELEMETRY_PATH:-/api/v1/internal/iot/telemetry}
       TELEMETRY_HTTP_API_KEY: ${TELEMETRY_HTTP_API_KEY:-dev-gps-ingest}
+      TELEMETRY_FILE_LOG_DIR: /opt/telemetry
+      TELEMETRY_FILE_LOG_DAYS: "2"
+      TZ: Asia/Kolkata
     env_file:
       - .env
     volumes:
       - telemetry_data:/data
+      - /opt/telemetry:/opt/telemetry
 
 volumes:
   telemetry_data:

@@ -1,3 +1,4 @@
+import { startFileLogRetention } from './file-log.js';
 import { ConfigStore } from './store.js';
 import { Runtime } from './runtime.js';
 import { connectMongo, disconnectMongo } from './db.js';
@@ -6,6 +7,7 @@ import { isMainModule } from './module.js';
 export async function start(): Promise<void> {
   const store = new ConfigStore();
   const runtime = new Runtime(store);
+  startFileLogRetention();
   await connectMongo(runtime.config.mongodb.uri);
   await runtime.startAdminHttp();
   await runtime.startChannels();

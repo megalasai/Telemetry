@@ -29,12 +29,15 @@ nano .env
 Set `MONGODB_URI` to the real `switchride_app` password (same cluster as the API). Then:
 
 ```bash
+mkdir -p /opt/telemetry
 docker compose up -d --build
 curl -s http://127.0.0.1:4200/health
 docker compose logs -f
 ```
 
 Point WanWay devices at the droplet public IP, port **21100** (or 5001 / 8821). Register the IMEI in admin IoT Devices as vendor WanWay.
+
+Received packets are written **first** under `/opt/telemetry/YYYY-MM-DD/{port}/received.jsonl` (for example `/opt/telemetry/2026-10-31/21100/received.jsonl`), then stored in MongoDB. Folders older than **2 days** are deleted automatically. Create the host folder before start: `mkdir -p /opt/telemetry`.
 
 ## Update later
 

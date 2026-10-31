@@ -1,6 +1,7 @@
 import net from 'node:net';
 import type { AppConfig, GpsSource } from './types.js';
 import type { ConfigStore } from './store.js';
+import { logDeviceFile } from './file-log.js';
 import { ingestPing, parseTcpLine } from './ingest.js';
 
 export function startTcpSource(config: AppConfig, store: ConfigStore, source: GpsSource): net.Server {
@@ -15,7 +16,7 @@ export function startTcpSource(config: AppConfig, store: ConfigStore, source: Gp
       while (newline >= 0) {
         const line = buffer.slice(0, newline);
         buffer = buffer.slice(newline + 1);
-        void handleLine(config, store, socket, line);
+        void handleLine(config, store, socket, line, port);
         newline = buffer.indexOf('\n');
       }
     });
@@ -25,7 +26,8 @@ export function startTcpSource(config: AppConfig, store: ConfigStore, source: Gp
   return server;
 }
 
-async function handleLine(config: AppConfig, store: ConfigStore, socket: net.Socket, line: string): Promise<void> {
+async function handleLine(config: AppConfig, store: ConfigStore, socket: net.Socket, line: string, port: number): Promise<void> {
+  logDeviceFile(port, { kind: 'raw', remote: `${socket.remoteAddress}:${socket.remotePort}`, line: line.slice(0, 2000) });
   const ping = parseTcpLine(line);
   if (!ping) {
     socket.write(`${JSON.stringify({ ok: false, error: 'Could not parse GPS line' })}\n`);

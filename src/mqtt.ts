@@ -1,5 +1,6 @@
 import mqtt from 'mqtt';
 import type { AppConfig, GpsSource } from './types.js';
+import { logDeviceFile } from './file-log.js';
 import { ingestPing, normalizePing, parseTcpLine } from './ingest.js';
 import { parsePayload } from './parse.js';
 import type { ConfigStore } from './store.js';
@@ -40,6 +41,7 @@ async function handleMqttPayload(config: AppConfig, store: ConfigStore, source: 
   try {
     const trimmed = text.trim();
     if (!trimmed) return;
+    logDeviceFile('mqtt', { kind: 'mqtt', source: source.name, text: trimmed.slice(0, 4000) });
     let rows: Record<string, unknown>[] = [];
     if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
       rows = parsePayload(JSON.parse(trimmed) as unknown, source.itemsPath, source.map);

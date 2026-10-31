@@ -1,5 +1,6 @@
 import { createServer, type Server, type Socket } from 'node:net';
 import { env, envBool } from './env.js';
+import { logDeviceFile } from './file-log.js';
 import { ingestPing, touchDevice } from './ingest.js';
 import type { ConfigStore } from './store.js';
 import type { AppConfig } from './types.js';
@@ -72,6 +73,12 @@ export class WanwayTcp {
     console.log(`WanWay connection ${remote} on :${port}`);
 
     socket.on('data', (chunk: Buffer) => {
+      logDeviceFile(port, {
+        kind: 'raw',
+        remote,
+        bytes: chunk.length,
+        hex: chunk.subarray(0, 512).toString('hex'),
+      });
       buf = Buffer.concat([buf, chunk]);
       if (buf.length > 65_536) buf = buf.subarray(buf.length - 32_768);
       const parsed = parseWanwayBuffer(buf, imei);
@@ -88,6 +95,15 @@ export class WanwayTcp {
         this.status.packets += 1;
         this.status.lastImei = fix.imei || imei;
         this.status.lastAt = new Date().toISOString();
+        logDeviceFile(port, {
+          kind: fix.kind,
+          remote,
+          imei: fix.imei || imei,
+          lat: fix.lat,
+          lng: fix.lng,
+          speedKmh: fix.speedKmh,
+          ignition: fix.ignition,
+        });
         void persistFix(config, store, fix).catch((error) => {
           this.status.lastError = error instanceof Error ? error.message : String(error);
           console.warn(`WanWay ingest ${fix.imei}: ${this.status.lastError}`);

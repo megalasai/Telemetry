@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import { logDeviceFile } from './file-log.js';
 import { ingestPing, normalizePing } from './ingest.js';
 import { listMongoPositions } from './db.js';
 import { invalidateHubCache } from './place.js';
@@ -136,7 +137,9 @@ export async function startHttp(runtime: Runtime) {
     const body = request.body as { items?: Record<string, unknown>[] } | Record<string, unknown>[];
     const items = Array.isArray(body) ? body : body.items ?? [];
     const results = [];
+    const port = runtime.config.http.port;
     for (const item of items) {
+      logDeviceFile(port, { kind: 'http-batch', body: item });
       const ping = normalizePing(item);
       results.push(ping ? await ingestPing(runtime.config, runtime.store, ping) : { updated: false, message: 'Invalid ping' });
     }
@@ -156,6 +159,7 @@ function readKey(header: string | string[] | undefined, authorization: string | 
 }
 
 async function ingestBody(runtime: Runtime, raw: unknown, reply: { code: (n: number) => { send: (b: unknown) => unknown } }) {
+  logDeviceFile(runtime.config.http.port, { kind: 'http', body: raw });
   const ping = normalizePing((raw ?? {}) as Record<string, unknown>);
   if (!ping) {
     return reply.code(400).send({
