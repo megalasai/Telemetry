@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import type { AppConfig } from './types.js';
 import type { ConfigStore } from './store.js';
 import { DeviceModel, GpsPositionModel, VehicleModel, pruneTrail } from './db.js';
@@ -166,64 +167,60 @@ export async function ingestPing(config: AppConfig, store: ConfigStore, ping: Gp
   });
 
   if (deviceId) {
-    const vehicleId = vehicle?._id?.toString();
+    const vehicleId = vehicle?._id != null ? String(vehicle._id) : undefined;
     const vehicleTaken =
       vehicleId != null
         ? await DeviceModel.findOne({ vehicleId, deviceId: { $ne: deviceId } }).select({ deviceId: 1 }).lean()
         : null;
-    await DeviceModel.findOneAndUpdate(
-      { deviceId },
-      {
-        $set: {
-          ...(vehicleId && !vehicleTaken ? { vehicleId } : {}),
-          lastLat: ping.lat,
-          lastLng: ping.lng,
-          batteryPercent: ping.batteryPercent,
-          odometerKm: ping.odometerKm,
-          lastSeenAt: at,
-          connectionStatus: 'Connected',
-          imei: ping.deviceId,
-          ...(ping.speedKmh != null ? { speedKmh: ping.speedKmh } : {}),
-          ...(ping.ignition ? { ignition: ping.ignition } : {}),
-        },
-        $setOnInsert: {
-          deviceId,
-          vendorType: ping.vendorType ?? (ping.registrationNumber ? 'Track360' : 'GpsIngest'),
-        },
-      },
-      { upsert: true, setDefaultsOnInsert: true },
-    );
+    const deviceSet: Record<string, unknown> = {
+      lastLat: ping.lat,
+      lastLng: ping.lng,
+      lastSeenAt: at,
+      connectionStatus: 'Connected',
+      imei: ping.deviceId ?? deviceId,
+      ...(vehicleId && !vehicleTaken ? { vehicleId } : {}),
+      ...(ping.batteryPercent != null ? { batteryPercent: ping.batteryPercent } : {}),
+      ...(ping.odometerKm != null ? { odometerKm: ping.odometerKm } : {}),
+      ...(ping.speedKmh != null ? { speedKmh: ping.speedKmh } : {}),
+      ...(ping.ignition ? { ignition: ping.ignition } : {}),
+      ...(ping.vendorType ? { vendorType: ping.vendorType } : {}),
+    };
+    const existingDevice = await DeviceModel.findOne({
+      $or: [{ deviceId: { $in: deviceKeys(deviceId) } }, { imei: { $in: deviceKeys(deviceId) } }],
+    }).select({ _id: 1, deviceId: 1 }).lean();
+    if (existingDevice?._id) {
+      await DeviceModel.collection.updateOne({ _id: existingDevice._id }, { $set: deviceSet });
+    } else {
+      await upsertIgnoringDuplicate(DeviceModel, { deviceId }, {
+        ...deviceSet,
+        deviceId,
+        vendorType: ping.vendorType ?? 'WanWay',
+      });
+    }
   }
 
   if (vehicle) {
-    vehicle.lastLat = ping.lat;
-    vehicle.lastLng = ping.lng;
-    vehicle.lastTelemetryAt = at;
-    vehicle.lastPlace = place.lastPlace;
-    vehicle.lastPlaceKind = place.lastPlaceKind;
-    vehicle.lastHubId = place.lastHubId ?? undefined;
-    vehicle.locationTrail = trail;
+    const vehicleSet: Record<string, unknown> = {
+      lastLat: ping.lat,
+      lastLng: ping.lng,
+      lastTelemetryAt: at,
+      lastPlace: place.lastPlace,
+      lastPlaceKind: place.lastPlaceKind,
+      lastHubId: place.lastHubId ?? undefined,
+      locationTrail: trail,
+    };
     if (deviceId && vehicle.iotDeviceId !== deviceId) {
-      const taken = await VehicleModel.findOne({ iotDeviceId: deviceId, _id: { $ne: vehicle._id } }).select({ _id: 1 }).lean();
-      if (!taken) vehicle.iotDeviceId = deviceId;
-    }
-    if (ping.batteryPercent != null && Number.isFinite(ping.batteryPercent)) vehicle.batteryPercent = ping.batteryPercent;
-    if (ping.odometerKm != null && Number.isFinite(ping.odometerKm)) vehicle.odometerKm = ping.odometerKm;
-    if (ping.registrationNumber && ping.registrationNumber !== vehicle.registrationNumber) {
-      const clash = await VehicleModel.findOne({
-        registrationNumber: ping.registrationNumber,
-        _id: { $ne: vehicle._id },
-      })
+      const taken = await VehicleModel.findOne({ iotDeviceId: { $in: deviceKeys(deviceId) }, _id: { $ne: vehicle._id } })
         .select({ _id: 1 })
         .lean();
-      if (!clash) vehicle.registrationNumber = ping.registrationNumber;
+      if (!taken) vehicleSet.iotDeviceId = deviceId;
     }
-    if (vehicle.status === 'Offline') vehicle.status = 'Available';
-    try {
-      await vehicle.save();
-    } catch (error) {
-      if (!isDuplicateKey(error)) throw error;
-    }
+    if (ping.batteryPercent != null && Number.isFinite(ping.batteryPercent)) vehicleSet.batteryPercent = ping.batteryPercent;
+    if (ping.odometerKm != null && Number.isFinite(ping.odometerKm)) vehicleSet.odometerKm = ping.odometerKm;
+    if (vehicle.status === 'Offline') vehicleSet.status = 'Available';
+    if (ping.speedKmh != null) vehicleSet.speedKmh = ping.speedKmh;
+    if (ping.ignition) vehicleSet.ignition = ping.ignition;
+    await persistByEitherId(VehicleModel.collection, String(vehicle._id), vehicleSet);
   }
 
   await forwardToPlatform(config, ping, deviceId);
@@ -242,21 +239,59 @@ export async function ingestPing(config: AppConfig, store: ConfigStore, ping: Gp
   };
 }
 
+function deviceKeys(raw: string): string[] {
+  const keys = new Set<string>();
+  const value = String(raw ?? '').trim();
+  if (value) keys.add(value);
+  const digits = value.replace(/\D/g, '');
+  if (digits) {
+    keys.add(digits);
+    if (digits.length === 16 && digits.startsWith('0')) keys.add(digits.slice(1));
+    if (digits.length === 15) keys.add(`0${digits}`);
+  }
+  return [...keys];
+}
+
 async function resolveDeviceId(raw: string): Promise<string> {
-  const digits = String(raw ?? '').replace(/\D/g, '');
-  if (!digits) return raw;
-  const keys = new Set([raw, digits]);
-  if (digits.length === 16 && digits.startsWith('0')) keys.add(digits.slice(1));
-  if (digits.length === 15) keys.add(`0${digits}`);
+  const keys = deviceKeys(raw);
+  if (!keys.length) return raw;
   const found = await DeviceModel.findOne({
-    $or: [{ deviceId: { $in: [...keys] } }, { imei: { $in: [...keys] } }],
+    $or: [{ deviceId: { $in: keys } }, { imei: { $in: keys } }],
   });
-  return found?.deviceId ?? digits;
+  return found?.deviceId ?? keys.find((k) => /^\d+$/.test(k)) ?? raw;
+}
+
+async function findByEitherId(id: string) {
+  if (!id) return null;
+  const asString = await VehicleModel.findOne({ $expr: { $eq: [{ $toString: '$_id' }, id] } });
+  if (asString) return asString;
+  if (mongoose.Types.ObjectId.isValid(id)) return VehicleModel.findById(id);
+  return null;
+}
+
+async function persistByEitherId(
+  collection: { updateOne: (filter: object, update: object) => Promise<{ matchedCount: number }> },
+  id: string,
+  set: Record<string, unknown>,
+) {
+  const filters: object[] = [{ $expr: { $eq: [{ $toString: '$_id' }, id] } }];
+  if (mongoose.Types.ObjectId.isValid(id)) {
+    try {
+      filters.push({ _id: new mongoose.Types.ObjectId(id) });
+    } catch {
+      /* ignore */
+    }
+  }
+  filters.push({ _id: id });
+  for (const filter of filters) {
+    const res = await collection.updateOne(filter, { $set: set });
+    if (res.matchedCount) return;
+  }
 }
 
 async function resolveVehicle(ping: GpsPing) {
   if (ping.vehicleId) {
-    const byId = await VehicleModel.findById(ping.vehicleId);
+    const byId = await findByEitherId(ping.vehicleId);
     if (byId) return byId;
   }
   if (ping.registrationNumber) {
@@ -264,15 +299,15 @@ async function resolveVehicle(ping: GpsPing) {
     if (byReg) return byReg;
   }
   if (ping.deviceId) {
-    const keys = [ping.deviceId];
+    const keys = deviceKeys(ping.deviceId);
     const device = await DeviceModel.findOne({
       $or: [{ deviceId: { $in: keys } }, { imei: { $in: keys } }],
     });
     if (device?.vehicleId) {
-      const byDeviceVehicle = await VehicleModel.findById(device.vehicleId);
+      const byDeviceVehicle = await findByEitherId(String(device.vehicleId));
       if (byDeviceVehicle) return byDeviceVehicle;
     }
-    const byIot = await VehicleModel.findOne({ iotDeviceId: ping.deviceId });
+    const byIot = await VehicleModel.findOne({ iotDeviceId: { $in: keys } });
     if (byIot) return byIot;
   }
   return null;

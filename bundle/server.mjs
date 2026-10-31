@@ -95731,10 +95731,10 @@ var require_connection2 = __commonJS({
         });
       });
     };
-    async function _wrapUserTransaction(fn, session, mongoose2) {
+    async function _wrapUserTransaction(fn, session, mongoose3) {
       try {
-        const res = mongoose2.transactionAsyncLocalStorage == null ? await fn(session) : await new Promise((resolve) => {
-          mongoose2.transactionAsyncLocalStorage.run(
+        const res = mongoose3.transactionAsyncLocalStorage == null ? await fn(session) : await new Promise((resolve) => {
+          mongoose3.transactionAsyncLocalStorage.run(
             { session },
             () => resolve(fn(session))
           );
@@ -108783,7 +108783,7 @@ var require_mongoose = __commonJS({
     Mongoose.prototype.ConnectionStates = STATES;
     Mongoose.prototype.driver = driver;
     Mongoose.prototype.setDriver = function setDriver(driver2) {
-      const _mongoose = this instanceof Mongoose ? this : mongoose2;
+      const _mongoose = this instanceof Mongoose ? this : mongoose3;
       if (_mongoose.__driver === driver2) {
         return _mongoose;
       }
@@ -108801,7 +108801,7 @@ var require_mongoose = __commonJS({
         }
       }
       if (driver2.SchemaTypes != null) {
-        Object.assign(mongoose2.Schema.Types, driver2.SchemaTypes);
+        Object.assign(mongoose3.Schema.Types, driver2.SchemaTypes);
       }
       const Connection = driver2.Connection;
       const oldDefaultConnection = _mongoose.connections[0];
@@ -108819,7 +108819,7 @@ var require_mongoose = __commonJS({
       return _mongoose;
     };
     Mongoose.prototype.set = function getsetOptions(key, value) {
-      const _mongoose = this instanceof Mongoose ? this : mongoose2;
+      const _mongoose = this instanceof Mongoose ? this : mongoose3;
       if (arguments.length === 1 && typeof key !== "object") {
         if (VALID_OPTIONS.indexOf(key) === -1) {
           const error2 = new SetOptionError();
@@ -108880,7 +108880,7 @@ var require_mongoose = __commonJS({
     };
     Mongoose.prototype.get = Mongoose.prototype.set;
     Mongoose.prototype.createConnection = function createConnection(uri, options) {
-      const _mongoose = this instanceof Mongoose ? this : mongoose2;
+      const _mongoose = this instanceof Mongoose ? this : mongoose3;
       const Connection = _mongoose.__driver.Connection;
       const conn = new Connection(_mongoose);
       _mongoose.connections.push(conn);
@@ -108895,7 +108895,7 @@ var require_mongoose = __commonJS({
       if (typeof options === "function" || arguments.length >= 3 && typeof arguments[2] === "function") {
         throw new MongooseError("Mongoose.prototype.connect() no longer accepts a callback");
       }
-      const _mongoose = this instanceof Mongoose ? this : mongoose2;
+      const _mongoose = this instanceof Mongoose ? this : mongoose3;
       if (_mongoose.connection == null) {
         _createDefaultConnection(_mongoose);
       }
@@ -108906,7 +108906,7 @@ var require_mongoose = __commonJS({
       if (arguments.length >= 1 && typeof arguments[0] === "function") {
         throw new MongooseError("Mongoose.prototype.disconnect() no longer accepts a callback");
       }
-      const _mongoose = this instanceof Mongoose ? this : mongoose2;
+      const _mongoose = this instanceof Mongoose ? this : mongoose3;
       const remaining = _mongoose.connections.length;
       if (remaining <= 0) {
         return;
@@ -108914,18 +108914,18 @@ var require_mongoose = __commonJS({
       await Promise.all(_mongoose.connections.map((conn) => conn.close()));
     };
     Mongoose.prototype.startSession = function startSession() {
-      const _mongoose = this instanceof Mongoose ? this : mongoose2;
+      const _mongoose = this instanceof Mongoose ? this : mongoose3;
       return _mongoose.connection.startSession.apply(_mongoose.connection, arguments);
     };
     Mongoose.prototype.pluralize = function pluralize(fn) {
-      const _mongoose = this instanceof Mongoose ? this : mongoose2;
+      const _mongoose = this instanceof Mongoose ? this : mongoose3;
       if (arguments.length > 0) {
         _mongoose._pluralize = fn;
       }
       return _mongoose._pluralize;
     };
     Mongoose.prototype.model = function model(name, schema, collection, options) {
-      const _mongoose = this instanceof Mongoose ? this : mongoose2;
+      const _mongoose = this instanceof Mongoose ? this : mongoose3;
       if (typeof schema === "string") {
         collection = schema;
         schema = false;
@@ -108973,7 +108973,7 @@ var require_mongoose = __commonJS({
       return model2;
     };
     Mongoose.prototype._model = function _model(name, schema, collection, options) {
-      const _mongoose = this instanceof Mongoose ? this : mongoose2;
+      const _mongoose = this instanceof Mongoose ? this : mongoose3;
       let model;
       if (typeof name === "function") {
         model = name;
@@ -109012,25 +109012,25 @@ var require_mongoose = __commonJS({
       return model;
     };
     Mongoose.prototype.deleteModel = function deleteModel(name) {
-      const _mongoose = this instanceof Mongoose ? this : mongoose2;
+      const _mongoose = this instanceof Mongoose ? this : mongoose3;
       _mongoose.connection.deleteModel(name);
       delete _mongoose.models[name];
       return _mongoose;
     };
     Mongoose.prototype.modelNames = function modelNames() {
-      const _mongoose = this instanceof Mongoose ? this : mongoose2;
+      const _mongoose = this instanceof Mongoose ? this : mongoose3;
       const names = Object.keys(_mongoose.models);
       return names;
     };
     Mongoose.prototype._applyPlugins = function _applyPlugins(schema, options) {
-      const _mongoose = this instanceof Mongoose ? this : mongoose2;
+      const _mongoose = this instanceof Mongoose ? this : mongoose3;
       options = options || {};
       options.applyPluginsToDiscriminators = _mongoose.options && _mongoose.options.applyPluginsToDiscriminators || false;
       options.applyPluginsToChildSchemas = typeof (_mongoose.options && _mongoose.options.applyPluginsToChildSchemas) === "boolean" ? _mongoose.options.applyPluginsToChildSchemas : true;
       applyPlugins(schema, _mongoose.plugins, options, "$globalPluginsApplied");
     };
     Mongoose.prototype.plugin = function plugin(fn, opts) {
-      const _mongoose = this instanceof Mongoose ? this : mongoose2;
+      const _mongoose = this instanceof Mongoose ? this : mongoose3;
       _mongoose.plugins.push([fn, opts]);
       return _mongoose;
     };
@@ -109080,14 +109080,14 @@ var require_mongoose = __commonJS({
     Mongoose.prototype.DocumentProvider = require_documentProvider();
     Mongoose.prototype.ObjectId = SchemaTypes.ObjectId;
     Mongoose.prototype.isValidObjectId = function isValidObjectId(v) {
-      const _mongoose = this instanceof Mongoose ? this : mongoose2;
+      const _mongoose = this instanceof Mongoose ? this : mongoose3;
       return _mongoose.Types.ObjectId.isValid(v);
     };
     Mongoose.prototype.isObjectIdOrHexString = function isObjectIdOrHexString(v) {
       return isBsonType(v, "ObjectId") || typeof v === "string" && objectIdHexRegexp.test(v);
     };
     Mongoose.prototype.syncIndexes = function syncIndexes(options) {
-      const _mongoose = this instanceof Mongoose ? this : mongoose2;
+      const _mongoose = this instanceof Mongoose ? this : mongoose3;
       return _mongoose.connection.syncIndexes(options);
     };
     Mongoose.prototype.Decimal128 = SchemaTypes.Decimal128;
@@ -109107,15 +109107,15 @@ var require_mongoose = __commonJS({
     Mongoose.prototype.skipMiddlewareFunction = Kareem.skipWrappedFunction;
     Mongoose.prototype.overwriteMiddlewareResult = Kareem.overwriteResult;
     Mongoose.prototype.omitUndefined = require_omitUndefined();
-    function _createDefaultConnection(mongoose3) {
-      if (mongoose3.connection) {
+    function _createDefaultConnection(mongoose4) {
+      if (mongoose4.connection) {
         return;
       }
-      const conn = mongoose3.createConnection();
+      const conn = mongoose4.createConnection();
       conn[defaultConnectionSymbol] = true;
-      conn.models = mongoose3.models;
+      conn.models = mongoose4.models;
     }
-    var mongoose2 = module.exports = exports = new Mongoose({
+    var mongoose3 = module.exports = exports = new Mongoose({
       [defaultMongooseSymbol]: true
     });
   }
@@ -109127,10 +109127,10 @@ var require_lib7 = __commonJS({
     "use strict";
     var mongodbDriver = require_node_mongodb_native();
     require_driver().set(mongodbDriver);
-    var mongoose2 = require_mongoose();
-    mongoose2.setDriver(mongodbDriver);
-    mongoose2.Mongoose.prototype.mongo = require_lib4();
-    module.exports = mongoose2;
+    var mongoose3 = require_mongoose();
+    mongoose3.setDriver(mongodbDriver);
+    mongoose3.Mongoose.prototype.mongo = require_lib4();
+    module.exports = mongoose3;
   }
 });
 
@@ -109138,55 +109138,55 @@ var require_lib7 = __commonJS({
 var require_mongoose2 = __commonJS({
   "node_modules/mongoose/index.js"(exports, module) {
     "use strict";
-    var mongoose2 = require_lib7();
-    module.exports = mongoose2;
-    module.exports.default = mongoose2;
-    module.exports.mongoose = mongoose2;
-    module.exports.cast = mongoose2.cast;
-    module.exports.STATES = mongoose2.STATES;
-    module.exports.setDriver = mongoose2.setDriver;
-    module.exports.set = mongoose2.set;
-    module.exports.get = mongoose2.get;
-    module.exports.createConnection = mongoose2.createConnection;
-    module.exports.connect = mongoose2.connect;
-    module.exports.disconnect = mongoose2.disconnect;
-    module.exports.startSession = mongoose2.startSession;
-    module.exports.pluralize = mongoose2.pluralize;
-    module.exports.model = mongoose2.model;
-    module.exports.deleteModel = mongoose2.deleteModel;
-    module.exports.modelNames = mongoose2.modelNames;
-    module.exports.plugin = mongoose2.plugin;
-    module.exports.connections = mongoose2.connections;
-    module.exports.version = mongoose2.version;
-    module.exports.Aggregate = mongoose2.Aggregate;
-    module.exports.Mongoose = mongoose2.Mongoose;
-    module.exports.Schema = mongoose2.Schema;
-    module.exports.SchemaType = mongoose2.SchemaType;
-    module.exports.SchemaTypes = mongoose2.SchemaTypes;
-    module.exports.VirtualType = mongoose2.VirtualType;
-    module.exports.Types = mongoose2.Types;
-    module.exports.Query = mongoose2.Query;
-    module.exports.Model = mongoose2.Model;
-    module.exports.Document = mongoose2.Document;
-    module.exports.ObjectId = mongoose2.ObjectId;
-    module.exports.isValidObjectId = mongoose2.isValidObjectId;
-    module.exports.isObjectIdOrHexString = mongoose2.isObjectIdOrHexString;
-    module.exports.syncIndexes = mongoose2.syncIndexes;
-    module.exports.Decimal128 = mongoose2.Decimal128;
-    module.exports.Mixed = mongoose2.Mixed;
-    module.exports.Date = mongoose2.Date;
-    module.exports.Number = mongoose2.Number;
-    module.exports.Error = mongoose2.Error;
-    module.exports.MongooseError = mongoose2.MongooseError;
-    module.exports.now = mongoose2.now;
-    module.exports.CastError = mongoose2.CastError;
-    module.exports.SchemaTypeOptions = mongoose2.SchemaTypeOptions;
-    module.exports.mongo = mongoose2.mongo;
-    module.exports.mquery = mongoose2.mquery;
-    module.exports.sanitizeFilter = mongoose2.sanitizeFilter;
-    module.exports.trusted = mongoose2.trusted;
-    module.exports.skipMiddlewareFunction = mongoose2.skipMiddlewareFunction;
-    module.exports.overwriteMiddlewareResult = mongoose2.overwriteMiddlewareResult;
+    var mongoose3 = require_lib7();
+    module.exports = mongoose3;
+    module.exports.default = mongoose3;
+    module.exports.mongoose = mongoose3;
+    module.exports.cast = mongoose3.cast;
+    module.exports.STATES = mongoose3.STATES;
+    module.exports.setDriver = mongoose3.setDriver;
+    module.exports.set = mongoose3.set;
+    module.exports.get = mongoose3.get;
+    module.exports.createConnection = mongoose3.createConnection;
+    module.exports.connect = mongoose3.connect;
+    module.exports.disconnect = mongoose3.disconnect;
+    module.exports.startSession = mongoose3.startSession;
+    module.exports.pluralize = mongoose3.pluralize;
+    module.exports.model = mongoose3.model;
+    module.exports.deleteModel = mongoose3.deleteModel;
+    module.exports.modelNames = mongoose3.modelNames;
+    module.exports.plugin = mongoose3.plugin;
+    module.exports.connections = mongoose3.connections;
+    module.exports.version = mongoose3.version;
+    module.exports.Aggregate = mongoose3.Aggregate;
+    module.exports.Mongoose = mongoose3.Mongoose;
+    module.exports.Schema = mongoose3.Schema;
+    module.exports.SchemaType = mongoose3.SchemaType;
+    module.exports.SchemaTypes = mongoose3.SchemaTypes;
+    module.exports.VirtualType = mongoose3.VirtualType;
+    module.exports.Types = mongoose3.Types;
+    module.exports.Query = mongoose3.Query;
+    module.exports.Model = mongoose3.Model;
+    module.exports.Document = mongoose3.Document;
+    module.exports.ObjectId = mongoose3.ObjectId;
+    module.exports.isValidObjectId = mongoose3.isValidObjectId;
+    module.exports.isObjectIdOrHexString = mongoose3.isObjectIdOrHexString;
+    module.exports.syncIndexes = mongoose3.syncIndexes;
+    module.exports.Decimal128 = mongoose3.Decimal128;
+    module.exports.Mixed = mongoose3.Mixed;
+    module.exports.Date = mongoose3.Date;
+    module.exports.Number = mongoose3.Number;
+    module.exports.Error = mongoose3.Error;
+    module.exports.MongooseError = mongoose3.MongooseError;
+    module.exports.now = mongoose3.now;
+    module.exports.CastError = mongoose3.CastError;
+    module.exports.SchemaTypeOptions = mongoose3.SchemaTypeOptions;
+    module.exports.mongo = mongoose3.mongo;
+    module.exports.mquery = mongoose3.mquery;
+    module.exports.sanitizeFilter = mongoose3.sanitizeFilter;
+    module.exports.trusted = mongoose3.trusted;
+    module.exports.skipMiddlewareFunction = mongoose3.skipMiddlewareFunction;
+    module.exports.overwriteMiddlewareResult = mongoose3.overwriteMiddlewareResult;
   }
 });
 
@@ -128440,6 +128440,9 @@ function parseJson(raw, fallback) {
 // src/http.ts
 var import_fastify = __toESM(require_fastify(), 1);
 
+// src/ingest.ts
+var import_mongoose2 = __toESM(require_mongoose2(), 1);
+
 // src/db.ts
 var import_mongoose = __toESM(require_mongoose2(), 1);
 var pingSchema = new import_mongoose.Schema(
@@ -128463,13 +128466,17 @@ var vehicleSchema = new import_mongoose.Schema(
     lastPlace: String,
     lastPlaceKind: String,
     lastHubId: String,
-    locationTrail: { type: [pingSchema], default: [] }
+    locationTrail: { type: [pingSchema], default: [] },
+    tenantId: String,
+    speedKmh: Number,
+    ignition: String
   },
-  { collection: "vehicles", timestamps: true }
+  { collection: "vehicles", timestamps: true, strict: false }
 );
 var deviceSchema = new import_mongoose.Schema(
   {
-    deviceId: { type: String, required: true, unique: true },
+    deviceId: { type: String, required: true },
+    tenantId: String,
     vehicleId: String,
     vendorType: { type: String, default: "GpsIngest" },
     connectionStatus: { type: String, default: "Unknown" },
@@ -128482,7 +128489,7 @@ var deviceSchema = new import_mongoose.Schema(
     speedKmh: Number,
     ignition: String
   },
-  { collection: "iot_devices", timestamps: true }
+  { collection: "iot_devices", timestamps: true, strict: false }
 );
 var gpsSchema = new import_mongoose.Schema(
   {
@@ -128511,7 +128518,8 @@ async function connectMongo(uri) {
 }
 async function relaxConflictingIndexes() {
   await dropUniqueIfPresent("iot_devices", "vehicleId");
-  await DeviceModel.collection.createIndex({ deviceId: 1 }, { unique: true }).catch(() => void 0);
+  await dropUniqueIfPresent("iot_devices", "deviceId");
+  await DeviceModel.collection.createIndex({ deviceId: 1 }).catch(() => void 0);
   await DeviceModel.collection.createIndex({ vehicleId: 1 }, { sparse: true }).catch(() => void 0);
   await GpsPositionModel.collection.createIndex({ deviceKey: 1 }, { unique: true }).catch(() => void 0);
 }
@@ -128754,58 +128762,54 @@ async function ingestPing(config, store, ping) {
     locationTrail: trail
   });
   if (deviceId) {
-    const vehicleId = vehicle?._id?.toString();
+    const vehicleId = vehicle?._id != null ? String(vehicle._id) : void 0;
     const vehicleTaken = vehicleId != null ? await DeviceModel.findOne({ vehicleId, deviceId: { $ne: deviceId } }).select({ deviceId: 1 }).lean() : null;
-    await DeviceModel.findOneAndUpdate(
-      { deviceId },
-      {
-        $set: {
-          ...vehicleId && !vehicleTaken ? { vehicleId } : {},
-          lastLat: ping.lat,
-          lastLng: ping.lng,
-          batteryPercent: ping.batteryPercent,
-          odometerKm: ping.odometerKm,
-          lastSeenAt: at,
-          connectionStatus: "Connected",
-          imei: ping.deviceId,
-          ...ping.speedKmh != null ? { speedKmh: ping.speedKmh } : {},
-          ...ping.ignition ? { ignition: ping.ignition } : {}
-        },
-        $setOnInsert: {
-          deviceId,
-          vendorType: ping.vendorType ?? (ping.registrationNumber ? "Track360" : "GpsIngest")
-        }
-      },
-      { upsert: true, setDefaultsOnInsert: true }
-    );
+    const deviceSet = {
+      lastLat: ping.lat,
+      lastLng: ping.lng,
+      lastSeenAt: at,
+      connectionStatus: "Connected",
+      imei: ping.deviceId ?? deviceId,
+      ...vehicleId && !vehicleTaken ? { vehicleId } : {},
+      ...ping.batteryPercent != null ? { batteryPercent: ping.batteryPercent } : {},
+      ...ping.odometerKm != null ? { odometerKm: ping.odometerKm } : {},
+      ...ping.speedKmh != null ? { speedKmh: ping.speedKmh } : {},
+      ...ping.ignition ? { ignition: ping.ignition } : {},
+      ...ping.vendorType ? { vendorType: ping.vendorType } : {}
+    };
+    const existingDevice = await DeviceModel.findOne({
+      $or: [{ deviceId: { $in: deviceKeys(deviceId) } }, { imei: { $in: deviceKeys(deviceId) } }]
+    }).select({ _id: 1, deviceId: 1 }).lean();
+    if (existingDevice?._id) {
+      await DeviceModel.collection.updateOne({ _id: existingDevice._id }, { $set: deviceSet });
+    } else {
+      await upsertIgnoringDuplicate(DeviceModel, { deviceId }, {
+        ...deviceSet,
+        deviceId,
+        vendorType: ping.vendorType ?? "WanWay"
+      });
+    }
   }
   if (vehicle) {
-    vehicle.lastLat = ping.lat;
-    vehicle.lastLng = ping.lng;
-    vehicle.lastTelemetryAt = at;
-    vehicle.lastPlace = place.lastPlace;
-    vehicle.lastPlaceKind = place.lastPlaceKind;
-    vehicle.lastHubId = place.lastHubId ?? void 0;
-    vehicle.locationTrail = trail;
+    const vehicleSet = {
+      lastLat: ping.lat,
+      lastLng: ping.lng,
+      lastTelemetryAt: at,
+      lastPlace: place.lastPlace,
+      lastPlaceKind: place.lastPlaceKind,
+      lastHubId: place.lastHubId ?? void 0,
+      locationTrail: trail
+    };
     if (deviceId && vehicle.iotDeviceId !== deviceId) {
-      const taken = await VehicleModel.findOne({ iotDeviceId: deviceId, _id: { $ne: vehicle._id } }).select({ _id: 1 }).lean();
-      if (!taken) vehicle.iotDeviceId = deviceId;
+      const taken = await VehicleModel.findOne({ iotDeviceId: { $in: deviceKeys(deviceId) }, _id: { $ne: vehicle._id } }).select({ _id: 1 }).lean();
+      if (!taken) vehicleSet.iotDeviceId = deviceId;
     }
-    if (ping.batteryPercent != null && Number.isFinite(ping.batteryPercent)) vehicle.batteryPercent = ping.batteryPercent;
-    if (ping.odometerKm != null && Number.isFinite(ping.odometerKm)) vehicle.odometerKm = ping.odometerKm;
-    if (ping.registrationNumber && ping.registrationNumber !== vehicle.registrationNumber) {
-      const clash = await VehicleModel.findOne({
-        registrationNumber: ping.registrationNumber,
-        _id: { $ne: vehicle._id }
-      }).select({ _id: 1 }).lean();
-      if (!clash) vehicle.registrationNumber = ping.registrationNumber;
-    }
-    if (vehicle.status === "Offline") vehicle.status = "Available";
-    try {
-      await vehicle.save();
-    } catch (error) {
-      if (!isDuplicateKey(error)) throw error;
-    }
+    if (ping.batteryPercent != null && Number.isFinite(ping.batteryPercent)) vehicleSet.batteryPercent = ping.batteryPercent;
+    if (ping.odometerKm != null && Number.isFinite(ping.odometerKm)) vehicleSet.odometerKm = ping.odometerKm;
+    if (vehicle.status === "Offline") vehicleSet.status = "Available";
+    if (ping.speedKmh != null) vehicleSet.speedKmh = ping.speedKmh;
+    if (ping.ignition) vehicleSet.ignition = ping.ignition;
+    await persistByEitherId(VehicleModel.collection, String(vehicle._id), vehicleSet);
   }
   await forwardToPlatform(config, ping, deviceId);
   return {
@@ -128821,20 +128825,50 @@ async function ingestPing(config, store, ping) {
     storedIn: "mongodb"
   };
 }
+function deviceKeys(raw) {
+  const keys = /* @__PURE__ */ new Set();
+  const value = String(raw ?? "").trim();
+  if (value) keys.add(value);
+  const digits = value.replace(/\D/g, "");
+  if (digits) {
+    keys.add(digits);
+    if (digits.length === 16 && digits.startsWith("0")) keys.add(digits.slice(1));
+    if (digits.length === 15) keys.add(`0${digits}`);
+  }
+  return [...keys];
+}
 async function resolveDeviceId(raw) {
-  const digits = String(raw ?? "").replace(/\D/g, "");
-  if (!digits) return raw;
-  const keys = /* @__PURE__ */ new Set([raw, digits]);
-  if (digits.length === 16 && digits.startsWith("0")) keys.add(digits.slice(1));
-  if (digits.length === 15) keys.add(`0${digits}`);
+  const keys = deviceKeys(raw);
+  if (!keys.length) return raw;
   const found = await DeviceModel.findOne({
-    $or: [{ deviceId: { $in: [...keys] } }, { imei: { $in: [...keys] } }]
+    $or: [{ deviceId: { $in: keys } }, { imei: { $in: keys } }]
   });
-  return found?.deviceId ?? digits;
+  return found?.deviceId ?? keys.find((k) => /^\d+$/.test(k)) ?? raw;
+}
+async function findByEitherId(id) {
+  if (!id) return null;
+  const asString = await VehicleModel.findOne({ $expr: { $eq: [{ $toString: "$_id" }, id] } });
+  if (asString) return asString;
+  if (import_mongoose2.default.Types.ObjectId.isValid(id)) return VehicleModel.findById(id);
+  return null;
+}
+async function persistByEitherId(collection, id, set) {
+  const filters = [{ $expr: { $eq: [{ $toString: "$_id" }, id] } }];
+  if (import_mongoose2.default.Types.ObjectId.isValid(id)) {
+    try {
+      filters.push({ _id: new import_mongoose2.default.Types.ObjectId(id) });
+    } catch {
+    }
+  }
+  filters.push({ _id: id });
+  for (const filter of filters) {
+    const res = await collection.updateOne(filter, { $set: set });
+    if (res.matchedCount) return;
+  }
 }
 async function resolveVehicle(ping) {
   if (ping.vehicleId) {
-    const byId = await VehicleModel.findById(ping.vehicleId);
+    const byId = await findByEitherId(ping.vehicleId);
     if (byId) return byId;
   }
   if (ping.registrationNumber) {
@@ -128842,15 +128876,15 @@ async function resolveVehicle(ping) {
     if (byReg) return byReg;
   }
   if (ping.deviceId) {
-    const keys = [ping.deviceId];
+    const keys = deviceKeys(ping.deviceId);
     const device = await DeviceModel.findOne({
       $or: [{ deviceId: { $in: keys } }, { imei: { $in: keys } }]
     });
     if (device?.vehicleId) {
-      const byDeviceVehicle = await VehicleModel.findById(device.vehicleId);
+      const byDeviceVehicle = await findByEitherId(String(device.vehicleId));
       if (byDeviceVehicle) return byDeviceVehicle;
     }
-    const byIot = await VehicleModel.findOne({ iotDeviceId: ping.deviceId });
+    const byIot = await VehicleModel.findOne({ iotDeviceId: { $in: keys } });
     if (byIot) return byIot;
   }
   return null;

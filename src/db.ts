@@ -23,13 +23,17 @@ const vehicleSchema = new Schema(
     lastPlaceKind: String,
     lastHubId: String,
     locationTrail: { type: [pingSchema], default: [] },
+    tenantId: String,
+    speedKmh: Number,
+    ignition: String,
   },
-  { collection: 'vehicles', timestamps: true },
+  { collection: 'vehicles', timestamps: true, strict: false },
 );
 
 const deviceSchema = new Schema(
   {
-    deviceId: { type: String, required: true, unique: true },
+    deviceId: { type: String, required: true },
+    tenantId: String,
     vehicleId: String,
     vendorType: { type: String, default: 'GpsIngest' },
     connectionStatus: { type: String, default: 'Unknown' },
@@ -42,7 +46,7 @@ const deviceSchema = new Schema(
     speedKmh: Number,
     ignition: String,
   },
-  { collection: 'iot_devices', timestamps: true },
+  { collection: 'iot_devices', timestamps: true, strict: false },
 );
 
 const gpsSchema = new Schema(
@@ -75,7 +79,8 @@ export async function connectMongo(uri: string): Promise<void> {
 
 async function relaxConflictingIndexes() {
   await dropUniqueIfPresent('iot_devices', 'vehicleId');
-  await DeviceModel.collection.createIndex({ deviceId: 1 }, { unique: true }).catch(() => undefined);
+  await dropUniqueIfPresent('iot_devices', 'deviceId');
+  await DeviceModel.collection.createIndex({ deviceId: 1 }).catch(() => undefined);
   await DeviceModel.collection.createIndex({ vehicleId: 1 }, { sparse: true }).catch(() => undefined);
   await GpsPositionModel.collection.createIndex({ deviceKey: 1 }, { unique: true }).catch(() => undefined);
 }
