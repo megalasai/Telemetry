@@ -1,4 +1,4 @@
-/** WanWay GPS (GT06 / 0x7878 / 0x7979) plus ASCII *HQ frames from WanWay Protocol 2024. */
+/** WanWay GPS Protocol 2024.1.19 V3 (GT06 0x7878 / 0x7979). */
 
 export type WanwayFix = {
   imei: string;
@@ -9,7 +9,7 @@ export type WanwayFix = {
   course?: number;
   gpsValid?: boolean;
   at?: Date;
-  kind: 'login' | 'gps' | 'heartbeat' | 'alarm' | 'ascii';
+  kind: 'login' | 'gps' | 'heartbeat' | 'alarm' | 'ascii' | 'lbs' | 'info';
 };
 
 export type WanwayParseResult = {
@@ -27,10 +27,23 @@ const PROTO_LOGIN = 0x01;
 const PROTO_GPS = 0x12;
 const PROTO_HEARTBEAT = 0x13;
 const PROTO_ALARM = 0x16;
-const PROTO_GPS_LBS = 0x22;
+const PROTO_STRING = 0x21;
+const PROTO_GPS_UTC = 0x22;
 const PROTO_LBS_ONLY = 0x24;
-const PROTO_ALARM_LBS = 0x26;
+const PROTO_ALARM_UTC = 0x26;
+const PROTO_TIMEZONE = 0x27;
+const PROTO_SOS_ADDR = 0x2a;
+const PROTO_WIFI = 0x2c;
 const PROTO_GPS_4G = 0xa0;
+const PROTO_GENERAL = 0x94;
+
+type BinaryFrame = {
+  size: number;
+  serial: Buffer;
+  protocol: number;
+  info: Buffer;
+  extended: boolean;
+};
 
 export function crc16Itu(bytes: Uint8Array): number {
   let crc = 0xffff;
@@ -56,7 +69,7 @@ export function decodeBcdImei(raw: Buffer): string {
 
 function coordFromGt06(raw: number, negative: boolean): number {
   const deg = raw / 1_800_000;
-  if (!Number.isFinite(deg) || deg > 90 && deg > 180) return NaN;
+  if (!Number.isFinite(deg)) return NaN;
   return negative ? -deg : deg;
 }
 
@@ -72,87 +85,99 @@ function bcdDate(buf: Buffer, offset: number): Date | undefined {
   return Number.isNaN(dt.getTime()) ? undefined : dt;
 }
 
-export function buildAck(protocol: number, serial: Buffer): Buffer {
-  const body = Buffer.from([0x05, protocol, serial[0] ?? 0, serial[1] ?? 0]);
+/** Server ACK: 78 78 05 {proto} {serial} {crc} 0D 0A (or 79 79 00 05 … for 0x7979). */
+export function buildAck(protocol: number, serial: Buffer, extended = false): Buffer {
+  const s0 = serial[0] ?? 0;
+  const s1 = serial[1] ?? 0;
+  if (extended) {
+    const body = Buffer.from([0x00, 0x05, protocol, s0, s1]);
+    const crc = crc16Itu(body);
+    return Buffer.from([START_LONG, START_LONG, 0x00, 0x05, protocol, s0, s1, crc >> 8, crc & 0xff, STOP_A, STOP_B]);
+  }
+  const body = Buffer.from([0x05, protocol, s0, s1]);
   const crc = crc16Itu(body);
-  return Buffer.from([START_SHORT, START_SHORT, 0x05, protocol, serial[0] ?? 0, serial[1] ?? 0, crc >> 8, crc & 0xff, STOP_A, STOP_B]);
+  return Buffer.from([START_SHORT, START_SHORT, 0x05, protocol, s0, s1, crc >> 8, crc & 0xff, STOP_A, STOP_B]);
 }
 
-function parseGt06Information(protocol: number, info: Buffer, imei: string): { fix: WanwayFix | null; ack: boolean } {
+function parseGpsBlock(info: Buffer, imei: string, kind: WanwayFix['kind']): WanwayFix {
+  if (info.length < 18) return { imei, kind };
+  const at = bcdDate(info, 0);
+  const latRaw = info.readUInt32BE(7);
+  const lngRaw = info.readUInt32BE(11);
+  const speed = info[15];
+  const courseStatus = info.readUInt16BE(16);
+  const south = Boolean(courseStatus & 0x0400);
+  const west = Boolean(courseStatus & 0x0800);
+  const gpsValid = Boolean(courseStatus & 0x1000);
+  const course = courseStatus & 0x03ff;
+  const lat = coordFromGt06(latRaw, south);
+  const lng = coordFromGt06(lngRaw, west);
+  const accOffset = 18 + 2 + 1 + 2 + 3;
+  const ignition = info.length > accOffset ? (info[accOffset] ? 'ON' : 'OFF') : undefined;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+    return { imei, kind, gpsValid: false, at, ignition };
+  }
+  return { imei, lat, lng, speedKmh: speed, course, gpsValid, at, kind, ignition };
+}
+
+function parseInformation(protocol: number, info: Buffer, imei: string): WanwayFix | null {
   if (protocol === PROTO_LOGIN) {
     const id = decodeBcdImei(info.subarray(0, Math.min(8, info.length)));
-    return { fix: { imei: id || imei, kind: 'login' }, ack: true };
+    return { imei: id || imei, kind: 'login' };
   }
-  if (protocol === PROTO_HEARTBEAT || protocol === PROTO_LBS_ONLY) {
+  if (protocol === PROTO_HEARTBEAT) {
     const terminal = info[0] ?? 0;
-    const ignition = terminal & 0x02 ? 'ON' : 'OFF';
-    return { fix: { imei, kind: 'heartbeat', ignition: protocol === PROTO_HEARTBEAT ? ignition : undefined }, ack: true };
+    return { imei, kind: 'heartbeat', ignition: terminal & 0x02 ? 'ON' : 'OFF' };
+  }
+  if (protocol === PROTO_LBS_ONLY || protocol === PROTO_TIMEZONE || protocol === PROTO_WIFI || protocol === PROTO_STRING || protocol === PROTO_GENERAL) {
+    return { imei, kind: protocol === PROTO_LBS_ONLY ? 'lbs' : 'info' };
   }
   if (
     protocol === PROTO_GPS ||
-    protocol === PROTO_GPS_LBS ||
+    protocol === PROTO_GPS_UTC ||
     protocol === PROTO_ALARM ||
-    protocol === PROTO_ALARM_LBS ||
-    protocol === PROTO_GPS_4G
+    protocol === PROTO_ALARM_UTC ||
+    protocol === PROTO_GPS_4G ||
+    protocol === PROTO_SOS_ADDR
   ) {
-    if (info.length < 15) return { fix: { imei, kind: 'gps' }, ack: true };
-    const at = bcdDate(info, 0);
-    const latRaw = info.readUInt32BE(7);
-    const lngRaw = info.readUInt32BE(11);
-    const speed = info[15];
-    const courseStatus = info.length >= 18 ? info.readUInt16BE(16) : 0;
-    const south = Boolean(courseStatus & 0x0400);
-    const west = Boolean(courseStatus & 0x0800);
-    const gpsValid = Boolean(courseStatus & 0x1000);
-    const course = courseStatus & 0x03ff;
-    const lat = coordFromGt06(latRaw, south);
-    const lng = coordFromGt06(lngRaw, west);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
-      return { fix: { imei, kind: 'gps', gpsValid: false, at }, ack: true };
-    }
-    return {
-      fix: {
-        imei,
-        lat,
-        lng,
-        speedKmh: speed,
-        course,
-        gpsValid,
-        at,
-        kind: protocol === PROTO_ALARM || protocol === PROTO_ALARM_LBS ? 'alarm' : 'gps',
-      },
-      ack: true,
-    };
+    const kind = protocol === PROTO_ALARM || protocol === PROTO_ALARM_UTC ? 'alarm' : 'gps';
+    return parseGpsBlock(info, imei, kind);
   }
-  return { fix: null, ack: false };
+  return imei ? { imei, kind: 'info' } : null;
 }
 
-function parseBinaryFrame(buf: Buffer, offset: number): { size: number; serial: Buffer; protocol: number; info: Buffer } | null {
+function parseBinaryFrame(buf: Buffer, offset: number): BinaryFrame | null {
   if (buf.length - offset < 10) return null;
   const a = buf[offset];
   const b = buf[offset + 1];
   if (a === START_SHORT && b === START_SHORT) {
     const length = buf[offset + 2];
+    if (length < 5) return { size: 1, serial: Buffer.alloc(2), protocol: 0, info: Buffer.alloc(0), extended: false };
     const size = 5 + length;
     if (buf.length - offset < size) return null;
-    if (buf[offset + size - 2] !== STOP_A || buf[offset + size - 1] !== STOP_B) return { size: 2, serial: Buffer.alloc(2), protocol: 0, info: Buffer.alloc(0) };
+    if (buf[offset + size - 2] !== STOP_A || buf[offset + size - 1] !== STOP_B) {
+      return { size: 1, serial: Buffer.alloc(2), protocol: 0, info: Buffer.alloc(0), extended: false };
+    }
     const content = buf.subarray(offset + 3, offset + 3 + length - 2);
-    const protocol = content[0];
+    const protocol = content[0] ?? 0;
     const info = content.subarray(1, Math.max(1, content.length - 2));
     const serial = content.subarray(content.length - 2);
-    return { size, serial, protocol, info };
+    return { size, serial: Buffer.from(serial), protocol, info: Buffer.from(info), extended: false };
   }
   if (a === START_LONG && b === START_LONG) {
     if (buf.length - offset < 11) return null;
     const length = buf.readUInt16BE(offset + 2);
+    if (length < 5) return { size: 1, serial: Buffer.alloc(2), protocol: 0, info: Buffer.alloc(0), extended: true };
     const size = 6 + length;
     if (buf.length - offset < size) return null;
-    if (buf[offset + size - 2] !== STOP_A || buf[offset + size - 1] !== STOP_B) return { size: 2, serial: Buffer.alloc(2), protocol: 0, info: Buffer.alloc(0) };
+    if (buf[offset + size - 2] !== STOP_A || buf[offset + size - 1] !== STOP_B) {
+      return { size: 1, serial: Buffer.alloc(2), protocol: 0, info: Buffer.alloc(0), extended: true };
+    }
     const content = buf.subarray(offset + 4, offset + 4 + length - 2);
-    const protocol = content[0];
+    const protocol = content[0] ?? 0;
     const info = content.subarray(1, Math.max(1, content.length - 2));
     const serial = content.subarray(content.length - 2);
-    return { size, serial, protocol, info };
+    return { size, serial: Buffer.from(serial), protocol, info: Buffer.from(info), extended: true };
   }
   return null;
 }
@@ -174,20 +199,37 @@ export function parseAsciiHq(text: string): WanwayFix | null {
   const end = text.indexOf('#', start);
   if (end < 0) return null;
   const parts = text.slice(start + 1, end).split(',');
-  if (parts.length < 10 || parts[0] !== 'HQ') return null;
+  if (parts.length < 3 || parts[0] !== 'HQ') return null;
   const imei = (parts[1] ?? '').replace(/\D/g, '');
-  const lat = nmeaToDeg(parts[5] ?? '', parts[6] ?? '');
-  const lng = nmeaToDeg(parts[7] ?? '', parts[8] ?? '');
-  const speed = Number(parts[9]);
   if (!imei) return null;
-  const fix: WanwayFix = { imei, kind: 'ascii' };
-  if (lat != null && lng != null && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
-    fix.lat = lat;
-    fix.lng = lng;
-    fix.gpsValid = (parts[4] ?? 'A') === 'A';
+  const cmd = (parts[2] ?? '').toUpperCase();
+  const fix: WanwayFix = { imei, kind: cmd === 'HT' || cmd === 'KN' ? 'heartbeat' : 'ascii' };
+  if (parts.length >= 10) {
+    const lat = nmeaToDeg(parts[5] ?? '', parts[6] ?? '');
+    const lng = nmeaToDeg(parts[7] ?? '', parts[8] ?? '');
+    const speed = Number(parts[9]);
+    if (lat != null && lng != null && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
+      fix.lat = lat;
+      fix.lng = lng;
+      fix.kind = 'gps';
+      fix.gpsValid = (parts[4] ?? 'A') === 'A';
+    }
+    if (Number.isFinite(speed)) fix.speedKmh = speed;
   }
-  if (Number.isFinite(speed)) fix.speedKmh = speed * 1.852 > 200 ? speed : speed;
   return fix;
+}
+
+function asciiAck(imei: string): Buffer {
+  const now = new Date();
+  const stamp = [
+    now.getUTCFullYear(),
+    String(now.getUTCMonth() + 1).padStart(2, '0'),
+    String(now.getUTCDate()).padStart(2, '0'),
+    String(now.getUTCHours()).padStart(2, '0'),
+    String(now.getUTCMinutes()).padStart(2, '0'),
+    String(now.getUTCSeconds()).padStart(2, '0'),
+  ].join('');
+  return Buffer.from(`*HQ,${imei},V4,${stamp}#`, 'ascii');
 }
 
 export function parseWanwayBuffer(buffer: Buffer, boundImei = ''): WanwayParseResult {
@@ -196,17 +238,21 @@ export function parseWanwayBuffer(buffer: Buffer, boundImei = ''): WanwayParseRe
   let consumed = 0;
   let imei = boundImei;
 
-  const ascii = buffer.toString('ascii');
-  if (ascii.includes('*HQ,')) {
-    const hash = ascii.indexOf('#');
-    if (hash >= 0) {
-      const fix = parseAsciiHq(ascii);
-      if (fix) {
-        fixes.push(fix);
-        if (fix.imei) imei = fix.imei;
+  const hasBinary = buffer.includes(START_SHORT) || buffer.includes(START_LONG);
+  if (!hasBinary) {
+    const ascii = buffer.toString('ascii');
+    if (ascii.includes('*HQ,')) {
+      const hash = ascii.indexOf('#');
+      if (hash >= 0) {
+        const fix = parseAsciiHq(ascii);
+        if (fix) {
+          fixes.push(fix);
+          if (fix.imei) imei = fix.imei;
+          replies.push(asciiAck(imei));
+        }
+        consumed = Math.min(buffer.length, hash + 1);
+        return { consumed, replies, fixes };
       }
-      consumed = Math.min(buffer.length, hash + 1);
-      return { consumed, replies, fixes };
     }
   }
 
@@ -223,18 +269,18 @@ export function parseWanwayBuffer(buffer: Buffer, boundImei = ''): WanwayParseRe
     if (at > consumed) consumed = at;
     const frame = parseBinaryFrame(buffer, consumed);
     if (!frame) break;
-    if (frame.size === 2 && frame.protocol === 0) {
+    if (frame.size <= 1 || frame.protocol === 0) {
       consumed += 1;
       continue;
     }
     consumed += frame.size;
-    const parsed = parseGt06Information(frame.protocol, frame.info, imei);
-    if (parsed.fix) {
-      if (parsed.fix.imei) imei = parsed.fix.imei;
-      else parsed.fix.imei = imei;
-      fixes.push(parsed.fix);
+    const fix = parseInformation(frame.protocol, frame.info, imei);
+    if (fix) {
+      if (fix.imei) imei = fix.imei;
+      else fix.imei = imei;
+      fixes.push(fix);
     }
-    if (parsed.ack) replies.push(buildAck(frame.protocol, frame.serial));
+    replies.push(buildAck(frame.protocol, frame.serial, frame.extended));
   }
 
   return { consumed, replies, fixes };

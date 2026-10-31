@@ -67,6 +67,8 @@ export class WanwayTcp {
 
   private onSocket(config: AppConfig, store: ConfigStore, socket: Socket, port: number) {
     this.status.connections += 1;
+    socket.setNoDelay(true);
+    socket.setKeepAlive(true, 30_000);
     let buf = Buffer.alloc(0);
     let imei = '';
     const remote = `${socket.remoteAddress}:${socket.remotePort}`;
@@ -83,9 +85,11 @@ export class WanwayTcp {
       if (buf.length > 65_536) buf = buf.subarray(buf.length - 32_768);
       const parsed = parseWanwayBuffer(buf, imei);
       if (parsed.consumed > 0) buf = buf.subarray(parsed.consumed);
-      for (const reply of parsed.replies) {
+      if (parsed.replies.length) {
+        const reply = parsed.replies.length === 1 ? parsed.replies[0] : Buffer.concat(parsed.replies);
         try {
           socket.write(reply);
+          logDeviceFile(port, { kind: 'ack', remote, hex: reply.toString('hex') });
         } catch {
           /* closed */
         }
