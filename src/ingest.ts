@@ -106,9 +106,14 @@ export async function touchDevice(
   imei: string,
   extras?: { ignition?: string; vendorType?: string },
 ): Promise<{ deviceId: string; updated: boolean }> {
+  if (await isIgnoredImei(imei)) return { deviceId: imei, updated: false };
   const deviceId = await resolveDeviceId(imei);
-  await DeviceModel.findOneAndUpdate(
-    { deviceId },
+  const existing = await DeviceModel.findOne({
+    $or: [{ deviceId: { $in: deviceKeys(deviceId) } }, { imei: { $in: deviceKeys(imei) } }],
+  }).select({ deviceId: 1 }).lean();
+  if (!existing) return { deviceId, updated: false };
+  await DeviceModel.collection.updateOne(
+    { deviceId: existing.deviceId ?? deviceId },
     {
       $set: {
         lastSeenAt: new Date(),
@@ -116,16 +121,29 @@ export async function touchDevice(
         imei,
         ...(extras?.ignition ? { ignition: extras.ignition } : {}),
       },
-      $setOnInsert: { deviceId, vendorType: extras?.vendorType ?? 'WanWay' },
     },
-    { upsert: true, setDefaultsOnInsert: true },
   );
-  return { deviceId, updated: true };
+  return { deviceId: String(existing.deviceId ?? deviceId), updated: true };
 }
 
 export async function ingestPing(config: AppConfig, store: ConfigStore, ping: GpsPing): Promise<IngestResult> {
   const at = ping.at && !Number.isNaN(ping.at.getTime()) ? ping.at : new Date();
   if (ping.deviceId) ping.deviceId = await resolveDeviceId(ping.deviceId);
+  if (ping.deviceId && (await isIgnoredImei(ping.deviceId))) {
+    return {
+      updated: false,
+      deviceId: ping.deviceId,
+      vehicleId: null,
+      vehicleRegistration: null,
+      lastPlace: null,
+      lastPlaceKind: null,
+      insideHub: false,
+      lat: ping.lat,
+      lng: ping.lng,
+      storedIn: 'mongodb',
+      message: 'Device was deleted; GPS is ignored',
+    };
+  }
   const deviceKey = ping.deviceId || ping.registrationNumber || ping.vehicleId;
   if (!deviceKey) {
     return {
@@ -248,6 +266,13 @@ export async function ingestPing(config: AppConfig, store: ConfigStore, ping: Gp
     lng: ping.lng,
     storedIn: 'mongodb',
   };
+}
+
+async function isIgnoredImei(raw: string) {
+  const keys = deviceKeys(raw);
+  if (!keys.length) return false;
+  const hit = await mongoose.connection.collection('iot_ignored_devices').findOne({ deviceKey: { $in: keys } });
+  return Boolean(hit);
 }
 
 function deviceKeys(raw: string): string[] {

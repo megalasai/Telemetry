@@ -128723,25 +128723,43 @@ function parseTcpLine(line) {
   });
 }
 async function touchDevice(imei, extras) {
+  if (await isIgnoredImei(imei)) return { deviceId: imei, updated: false };
   const deviceId = await resolveDeviceId(imei);
-  await DeviceModel.findOneAndUpdate(
-    { deviceId },
+  const existing = await DeviceModel.findOne({
+    $or: [{ deviceId: { $in: deviceKeys(deviceId) } }, { imei: { $in: deviceKeys(imei) } }]
+  }).select({ deviceId: 1 }).lean();
+  if (!existing) return { deviceId, updated: false };
+  await DeviceModel.collection.updateOne(
+    { deviceId: existing.deviceId ?? deviceId },
     {
       $set: {
         lastSeenAt: /* @__PURE__ */ new Date(),
         connectionStatus: "Connected",
         imei,
         ...extras?.ignition ? { ignition: extras.ignition } : {}
-      },
-      $setOnInsert: { deviceId, vendorType: extras?.vendorType ?? "WanWay" }
-    },
-    { upsert: true, setDefaultsOnInsert: true }
+      }
+    }
   );
-  return { deviceId, updated: true };
+  return { deviceId: String(existing.deviceId ?? deviceId), updated: true };
 }
 async function ingestPing(config, store, ping) {
   const at = ping.at && !Number.isNaN(ping.at.getTime()) ? ping.at : /* @__PURE__ */ new Date();
   if (ping.deviceId) ping.deviceId = await resolveDeviceId(ping.deviceId);
+  if (ping.deviceId && await isIgnoredImei(ping.deviceId)) {
+    return {
+      updated: false,
+      deviceId: ping.deviceId,
+      vehicleId: null,
+      vehicleRegistration: null,
+      lastPlace: null,
+      lastPlaceKind: null,
+      insideHub: false,
+      lat: ping.lat,
+      lng: ping.lng,
+      storedIn: "mongodb",
+      message: "Device was deleted; GPS is ignored"
+    };
+  }
   const deviceKey = ping.deviceId || ping.registrationNumber || ping.vehicleId;
   if (!deviceKey) {
     return {
@@ -128851,6 +128869,12 @@ async function ingestPing(config, store, ping) {
     lng: ping.lng,
     storedIn: "mongodb"
   };
+}
+async function isIgnoredImei(raw) {
+  const keys = deviceKeys(raw);
+  if (!keys.length) return false;
+  const hit = await import_mongoose2.default.connection.collection("iot_ignored_devices").findOne({ deviceKey: { $in: keys } });
+  return Boolean(hit);
 }
 function deviceKeys(raw) {
   const keys = /* @__PURE__ */ new Set();
@@ -129668,7 +129692,7 @@ var WanwayTcp = class {
         });
         if (imei) {
           void flushPendingCommand(socket, imei, serial, port, remote).then((used) => {
-            if (used) serial = nextSerial(serial);
+            if (used) serial = Buffer.from(nextSerial(serial));
           });
         }
       }
