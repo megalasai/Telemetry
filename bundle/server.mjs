@@ -129362,11 +129362,11 @@ function parseGpsBlock(info, imei, kind) {
   const lngRaw = info.readUInt32BE(11);
   const speed = info[15];
   const courseStatus = info.readUInt16BE(16);
-  const south = Boolean(courseStatus & 1024);
+  const north = Boolean(courseStatus & 1024);
   const west = Boolean(courseStatus & 2048);
   const gpsValid = Boolean(courseStatus & 4096);
   const course = courseStatus & 1023;
-  const lat = coordFromGt06(latRaw, south);
+  const lat = coordFromGt06(latRaw, !north);
   const lng = coordFromGt06(lngRaw, west);
   const accOffset = 18 + 2 + 1 + 2 + 3;
   const ignition = info.length > accOffset ? info[accOffset] ? "ON" : "OFF" : void 0;

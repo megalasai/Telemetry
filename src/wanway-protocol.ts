@@ -106,11 +106,12 @@ function parseGpsBlock(info: Buffer, imei: string, kind: WanwayFix['kind']): Wan
   const lngRaw = info.readUInt32BE(11);
   const speed = info[15];
   const courseStatus = info.readUInt16BE(16);
-  const south = Boolean(courseStatus & 0x0400);
+  // Protocol 2024 V3 §5.2.1.9: BYTE_1 bit2=1 North, bit3=1 West, bit4=1 GPS fix.
+  const north = Boolean(courseStatus & 0x0400);
   const west = Boolean(courseStatus & 0x0800);
   const gpsValid = Boolean(courseStatus & 0x1000);
   const course = courseStatus & 0x03ff;
-  const lat = coordFromGt06(latRaw, south);
+  const lat = coordFromGt06(latRaw, !north);
   const lng = coordFromGt06(lngRaw, west);
   const accOffset = 18 + 2 + 1 + 2 + 3;
   const ignition = info.length > accOffset ? (info[accOffset] ? 'ON' : 'OFF') : undefined;
