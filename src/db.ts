@@ -101,7 +101,19 @@ async function relaxConflictingIndexes() {
   await DeviceModel.collection.createIndex({ vehicleId: 1 }, { sparse: true }).catch(() => undefined);
   await GpsPositionModel.collection.createIndex({ deviceKey: 1 }, { unique: true }).catch(() => undefined);
   await GpsTrackPointModel.collection.createIndex({ vehicleId: 1, at: -1 }).catch(() => undefined);
-  await GpsTrackPointModel.collection.createIndex({ at: 1 }, { expireAfterSeconds: 14 * 24 * 60 * 60 }).catch(() => undefined);
+  await replaceTtlIndex(GpsTrackPointModel.collection, 'at', 180 * 24 * 60 * 60);
+}
+
+async function replaceTtlIndex(collection: { indexes(): Promise<{ name?: string; key?: Record<string, number>; expireAfterSeconds?: number }[]>; dropIndex(name: string): Promise<unknown>; createIndex(spec: Record<string, number>, options: { expireAfterSeconds: number }): Promise<unknown> }, field: string, expireAfterSeconds: number) {
+  try {
+    const indexes = await collection.indexes();
+    const ttl = indexes.find((index) => index.key && Object.keys(index.key).length === 1 && index.key[field] === 1);
+    if (ttl?.expireAfterSeconds === expireAfterSeconds) return;
+    if (ttl?.name) await collection.dropIndex(ttl.name).catch(() => undefined);
+    await collection.createIndex({ [field]: 1 }, { expireAfterSeconds });
+  } catch {
+    await collection.createIndex({ [field]: 1 }, { expireAfterSeconds }).catch(() => undefined);
+  }
 }
 
 async function dropUniqueIfPresent(collection: string, field: string) {

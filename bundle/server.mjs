@@ -128539,7 +128539,18 @@ async function relaxConflictingIndexes() {
   await DeviceModel.collection.createIndex({ vehicleId: 1 }, { sparse: true }).catch(() => void 0);
   await GpsPositionModel.collection.createIndex({ deviceKey: 1 }, { unique: true }).catch(() => void 0);
   await GpsTrackPointModel.collection.createIndex({ vehicleId: 1, at: -1 }).catch(() => void 0);
-  await GpsTrackPointModel.collection.createIndex({ at: 1 }, { expireAfterSeconds: 14 * 24 * 60 * 60 }).catch(() => void 0);
+  await replaceTtlIndex(GpsTrackPointModel.collection, "at", 180 * 24 * 60 * 60);
+}
+async function replaceTtlIndex(collection, field, expireAfterSeconds) {
+  try {
+    const indexes = await collection.indexes();
+    const ttl = indexes.find((index) => index.key && Object.keys(index.key).length === 1 && index.key[field] === 1);
+    if (ttl?.expireAfterSeconds === expireAfterSeconds) return;
+    if (ttl?.name) await collection.dropIndex(ttl.name).catch(() => void 0);
+    await collection.createIndex({ [field]: 1 }, { expireAfterSeconds });
+  } catch {
+    await collection.createIndex({ [field]: 1 }, { expireAfterSeconds }).catch(() => void 0);
+  }
 }
 async function dropUniqueIfPresent(collection, field) {
   const col = import_mongoose.default.connection.collection(collection);
