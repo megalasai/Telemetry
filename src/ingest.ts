@@ -185,9 +185,11 @@ export async function ingestPing(config: AppConfig, store: ConfigStore, ping: Gp
       ...(ping.ignition ? { ignition: ping.ignition } : {}),
       ...(ping.vendorType ? { vendorType: ping.vendorType } : {}),
     };
-    const existingDevice = await DeviceModel.findOne({
+    const existingDevice = (await DeviceModel.findOne({
       $or: [{ deviceId: { $in: deviceKeys(deviceId) } }, { imei: { $in: deviceKeys(deviceId) } }],
-    }).select({ _id: 1, deviceId: 1 }).lean();
+    })
+      .select({ _id: 1, deviceId: 1 })
+      .lean()) as { _id?: unknown } | null;
     if (existingDevice?._id) {
       await DeviceModel.collection.updateOne({ _id: existingDevice._id }, { $set: deviceSet });
     } else {

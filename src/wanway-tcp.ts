@@ -118,7 +118,7 @@ export class WanwayTcp {
         });
         if (imei) {
           void flushPendingCommand(socket, imei, serial, port, remote).then((used) => {
-            if (used) serial = nextSerial(serial);
+            if (used) serial = Buffer.from(nextSerial(serial));
           });
         }
       }
