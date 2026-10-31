@@ -51,12 +51,12 @@ export class WanwayTcp {
   }
 
   private listen(config: AppConfig, store: ConfigStore, host: string, port: number): Promise<void> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const server = createServer((socket) => this.onSocket(config, store, socket, port));
       server.on('error', (error) => {
         this.status.lastError = `port ${port}: ${error.message}`;
-        console.warn(`WanWay listen failed on ${host}:${port} — ${error.message}`);
-        resolve();
+        console.error(`WanWay listen failed on ${host}:${port} — ${error.message}`);
+        reject(error);
       });
       server.listen(port, host, () => {
         console.log(`WanWay GPS TCP listening on ${host}:${port}`);

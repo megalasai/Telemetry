@@ -44906,11 +44906,11 @@ var require_utils3 = __commonJS({
       const hrtime = process.hrtime();
       return Math.floor(hrtime[0] * 1e3 + hrtime[1] / 1e6);
     }
-    function calculateDurationInMs(started) {
-      if (typeof started !== "number") {
+    function calculateDurationInMs(started2) {
+      if (typeof started2 !== "number") {
         return -1;
       }
-      const elapsed = now() - started;
+      const elapsed = now() - started2;
       return elapsed < 0 ? 0 : elapsed;
     }
     function hasAtomicOperators(doc, options) {
@@ -62190,7 +62190,7 @@ var require_command_monitoring_events = __commonJS({
        * @param reply - the reply for this command from the server
        * @param started - a high resolution tuple timestamp of when the command was first sent, to calculate duration
        */
-      constructor(connection, command, reply, started, serverConnectionId) {
+      constructor(connection, command, reply, started2, serverConnectionId) {
         this.name = constants_1.COMMAND_SUCCEEDED;
         const cmd = extractCommand(command);
         const commandName = extractCommandName(cmd);
@@ -62200,7 +62200,7 @@ var require_command_monitoring_events = __commonJS({
         this.serviceId = serviceId;
         this.requestId = command.requestId;
         this.commandName = commandName;
-        this.duration = (0, utils_1.calculateDurationInMs)(started);
+        this.duration = (0, utils_1.calculateDurationInMs)(started2);
         this.reply = maybeRedact(commandName, cmd, extractReply(reply));
         this.serverConnectionId = serverConnectionId;
         this.databaseName = command.databaseName;
@@ -62221,7 +62221,7 @@ var require_command_monitoring_events = __commonJS({
        * @param error - the generated error or a server error response
        * @param started - a high resolution tuple timestamp of when the command was first sent, to calculate duration
        */
-      constructor(connection, command, error, started, serverConnectionId) {
+      constructor(connection, command, error, started2, serverConnectionId) {
         this.name = constants_1.COMMAND_FAILED;
         const cmd = extractCommand(command);
         const commandName = extractCommandName(cmd);
@@ -62231,7 +62231,7 @@ var require_command_monitoring_events = __commonJS({
         this.serviceId = serviceId;
         this.requestId = command.requestId;
         this.commandName = commandName;
-        this.duration = (0, utils_1.calculateDurationInMs)(started);
+        this.duration = (0, utils_1.calculateDurationInMs)(started2);
         this.failure = maybeRedact(commandName, cmd, error);
         this.serverConnectionId = serverConnectionId;
         this.databaseName = command.databaseName;
@@ -63225,9 +63225,9 @@ var require_connection = __commonJS({
       async *sendCommand(ns, command, options, responseType) {
         options?.signal?.throwIfAborted();
         const message = this.prepareCommand(ns.db, command, options);
-        let started = 0;
+        let started2 = 0;
         if (this.shouldEmitAndLogCommand) {
-          started = (0, utils_1.now)();
+          started2 = (0, utils_1.now)();
           this.emitAndLogCommand(this.monitorCommands, _Connection.COMMAND_STARTED, message.databaseName, this.established, new command_monitoring_events_1.CommandStartedEvent(this, message, this.description.serverConnectionId));
         }
         const bsonOptions = options.documentsReturnedIn == null || !options.raw ? options : {
@@ -63257,7 +63257,7 @@ var require_connection = __commonJS({
               throw new error_1.MongoServerError(object ??= document2.toObject(bsonOptions));
             }
             if (this.shouldEmitAndLogCommand) {
-              this.emitAndLogCommand(this.monitorCommands, _Connection.COMMAND_SUCCEEDED, message.databaseName, this.established, new command_monitoring_events_1.CommandSucceededEvent(this, message, options.noResponse ? void 0 : message.moreToCome ? { ok: 1 } : object ??= document2.toObject(bsonOptions), started, this.description.serverConnectionId));
+              this.emitAndLogCommand(this.monitorCommands, _Connection.COMMAND_SUCCEEDED, message.databaseName, this.established, new command_monitoring_events_1.CommandSucceededEvent(this, message, options.noResponse ? void 0 : message.moreToCome ? { ok: 1 } : object ??= document2.toObject(bsonOptions), started2, this.description.serverConnectionId));
             }
             if (responseType == null) {
               yield object ??= document2.toObject(bsonOptions);
@@ -63268,7 +63268,7 @@ var require_connection = __commonJS({
           }
         } catch (error) {
           if (this.shouldEmitAndLogCommand) {
-            this.emitAndLogCommand(this.monitorCommands, _Connection.COMMAND_FAILED, message.databaseName, this.established, new command_monitoring_events_1.CommandFailedEvent(this, message, error, started, this.description.serverConnectionId));
+            this.emitAndLogCommand(this.monitorCommands, _Connection.COMMAND_FAILED, message.databaseName, this.established, new command_monitoring_events_1.CommandFailedEvent(this, message, error, started2, this.description.serverConnectionId));
           }
           throw error;
         }
@@ -129628,12 +129628,12 @@ var WanwayTcp = class {
     this.servers = [];
   }
   listen(config, store, host, port) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const server = createServer((socket) => this.onSocket(config, store, socket, port));
       server.on("error", (error) => {
         this.status.lastError = `port ${port}: ${error.message}`;
-        console.warn(`WanWay listen failed on ${host}:${port} \u2014 ${error.message}`);
-        resolve();
+        console.error(`WanWay listen failed on ${host}:${port} \u2014 ${error.message}`);
+        reject(error);
       });
       server.listen(port, host, () => {
         console.log(`WanWay GPS TCP listening on ${host}:${port}`);
@@ -129862,38 +129862,45 @@ function isMainModule(metaUrl) {
 }
 
 // src/main.ts
+var started;
 async function start() {
-  const store = new ConfigStore();
-  const runtime = new Runtime(store);
-  startFileLogRetention();
-  await connectMongo(runtime.config.mongodb.uri);
-  await runtime.startAdminHttp();
-  await runtime.startChannels();
-  await runtime.startWanway();
-  console.log(`SQLite config ${store.filePath}`);
-  console.log(`MongoDB GPS ${runtime.config.mongodb.uri.replace(/\/\/([^@/]+)@/, "//***@")}`);
-  console.log(`Location API ${runtime.config.locationApi.url}${runtime.config.locationApi.path}`);
-  const shutdown = async () => {
-    await runtime.shutdown();
-    await disconnectMongo();
-    process.exit(0);
-  };
-  process.once("SIGINT", () => {
-    void shutdown();
-  });
-  process.once("SIGTERM", () => {
-    void shutdown();
-  });
+  if (started) {
+    return started;
+  }
+  started = (async () => {
+    const store = new ConfigStore();
+    const runtime = new Runtime(store);
+    startFileLogRetention();
+    await connectMongo(runtime.config.mongodb.uri);
+    await runtime.startAdminHttp();
+    await runtime.startChannels();
+    await runtime.startWanway();
+    console.log(`SQLite config ${store.filePath}`);
+    console.log(`MongoDB GPS ${runtime.config.mongodb.uri.replace(/\/\/([^@/]+)@/, "//***@")}`);
+    console.log(`Location API ${runtime.config.locationApi.url}${runtime.config.locationApi.path}`);
+    const shutdown = async () => {
+      await runtime.shutdown();
+      await disconnectMongo();
+      process.exit(0);
+    };
+    process.once("SIGINT", () => {
+      void shutdown();
+    });
+    process.once("SIGTERM", () => {
+      void shutdown();
+    });
+  })();
+  return started;
 }
-if (isMainModule(import.meta.url) && /main\.(t|j)s$/.test(process.argv[1] ?? "")) {
+if (isMainModule(import.meta.url)) {
   start().catch((error) => {
     console.error(error instanceof Error ? error.message : error);
     process.exit(1);
   });
 }
-export {
-  start
-};
+
+// src/entrypoint.ts
+await start();
 /*! Bundled license information:
 
 toad-cache/dist/toad-cache.cjs:
